@@ -136,6 +136,7 @@ function uplFormular(ziel, key){
       <button class="btn ghost" data-art="heute" title="schnittfertig — Untertitel drauf und sofort raus" onclick="uplArtWahl('heute')">⚡ Story HEUTE — sofort posten</button></div>
     <label class="meta"><b>Video</b></label>
     <div class="row" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Video wählen<input type="file" accept="video/*" hidden onchange="uplSetVideo(this)"></label><span id="uplV" class="meta">–</span></div>
+    <div class="row" style="gap:10px;align-items:center;margin-top:8px"><input id="uplIcloud" type="text" placeholder="iCloud-Link" style="flex:1;min-width:200px;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:10px"><button class="btn ghost" onclick="uplIcloudHolen()">Holen</button></div>
     <div id="uplCutter">
       <label class="meta" style="display:block;margin-top:12px"><b>Zusatzmaterial</b></label>
       <div class="row" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Dateien wählen<input type="file" accept="image/*,.pdf" multiple hidden onchange="uplSetZusatz(this)"></label><span id="uplZ" class="meta">–</span></div>
@@ -145,6 +146,10 @@ function uplFormular(ziel, key){
     <div class="row" style="margin-top:12px;align-items:center"><button class="btn" id="uplGo" onclick="uplSenden('${key||''}')" disabled>Hochladen</button><span id="uplStatus" class="meta"></span></div></div>`;
 }
 let UPL={art:'reel',video:null,zusatz:[]};
+// iCloud-Link (Anne 16.09.: Alex teilt so): der Rechner holt die passende Fassung und meldet sie im Eingang an
+function uplIcloudHolen(){const i=document.getElementById('uplIcloud'),st=document.getElementById('uplStatus');const l=(i.value||'').trim();if(!l)return;
+  const n=UPL.art==='reel'?((document.getElementById('uplNotiz')||{}).value||''):'';const args=['icloud',l,'--art',UPL.art];if(n)args.push('--notizen',n);
+  i.value='';if(st)st.textContent='Hole aus iCloud …';job(args,'iCloud-Link holen')}
 function uplArtWahl(a){UPL.art=a;
   const c=document.getElementById('uplCutter'); if(c){c.hidden=(a!=='reel'); if(a!=='reel'){UPL.zusatz=[];const z=document.getElementById('uplZ');if(z)z.textContent='–';const n=document.getElementById('uplNotiz');if(n)n.value=''}}
   document.querySelectorAll('#uplArt button').forEach(b=>{b.className='btn'+(b.dataset.art===a?'':' ghost');if(a==='heute'&&b.dataset.art==='heute'){b.style.background='var(--yellow)';b.style.color='var(--navy)'}else{b.style.background='';b.style.color=''}})}
@@ -351,6 +356,12 @@ function vSession(){
     if(vb){const v=d.verlauf||[];
       vb.innerHTML=(d.naechster?`<div class="zuord" style="margin-bottom:10px"><b>Als Nächstes:</b> ${esc(d.naechster.text)} <span class="pill">${esc(d.naechster.wer)}</span>${d.naechster.wer==='Claude'&&!d.claude_bereit?' <span style="color:var(--red)">— Claude-Zugang fehlt (Übersicht)</span>':''}</div>`:'')
         +(v.length?`<table>${v.map(e=>`<tr><td style="white-space:nowrap;color:var(--grey)">${esc(e.zeit)}</td><td><b>${esc(e.schritt)}</b>${e.detail?'<br><small class="hint">'+esc(e.detail)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="meta">Noch nichts passiert.</p>')}
+    const rb=$('#rohbox');
+    if(rb){const r=d.rohmaterial||[];
+      rb.innerHTML=r.length?r.map(x=>x.video&&x.url
+        ?`<div class="card" style="max-width:320px"><video src="${x.url}" controls preload="metadata" style="width:100%;border-radius:10px;background:#000"></video><div class="meta" style="margin-top:6px">${esc(x.name)} · ${Math.round(x.groesse/1e6)} MB · ${esc(x.mtime)}</div></div>`
+        :`<div class="card" style="max-width:320px">${x.url?`<img src="${x.url}" style="width:100%;border-radius:10px">`:''}<div class="meta" style="margin-top:6px">${esc(x.name)} · ${Math.round(x.groesse/1e6)} MB</div></div>`).join('')
+        :'<p class="meta">Liegt nicht auf diesem Rechner.</p>'}
     const box=$('#kand');if(!box)return;
     const ks=(d.kandidaten?.kandidaten||[]);
     box.innerHTML=ks.length?ks.sort((a,b)=>b.score-a.score).map(k=>`<div class="kand"><div class="row" style="justify-content:space-between"><b>${esc(k.titel||k.id)}</b><span class="pill">Score ${Math.round((k.score||0)*100)}</span></div>
@@ -371,6 +382,7 @@ function vSession(){
     <button class="btn ${s.transkript?'':'ghost'}" ${s.transkript?'':'disabled'} onclick="claude('candidates',{session:'${esc(s.id)}'},'Redaktion (Claude)')">${zoom?'4':'3'} · Claude findet Kandidaten</button>`})()}
     <span id="cleanup" class="meta"></span></div>
   
+  <div class="sec" style="border:0;padding:0"><h2>Rohmaterial</h2><div id="rohbox" class="grid">lädt …</div></div>
   <div class="sec" style="border:0;padding:0"><h2>Was mit dieser Aufnahme passiert ist</h2><div id="verlauf">lädt …</div></div>
   <div class="two"><div><div class="sec" style="border:0;padding:0;margin:0"><h2>Kandidaten</h2><div id="kand">lädt …</div></div></div>
   <div><div class="sec" style="border:0;padding:0;margin:0"><h2>Reels dieser Session</h2>

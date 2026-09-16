@@ -122,6 +122,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET") {
       const direkt = { "/api/state": "state", "/api/uebersicht": "uebersicht", "/api/frei": "frei", "/api/kpi": "kpi", "/api/material": "material", "/api/learnings": "learnings", "/api/claude-zugang": "claude_zugang" };
       if (direkt[p]) return sendJSON(res, 200, snapshot[direkt[p]] ?? (p === "/api/material" ? { material: [] } : {}));
+      if (p.startsWith("/api/storyroh/")) { const n = decodeURIComponent(p.slice(14)); return sendJSON(res, 200, (snapshot.storyroh || {})[n] || { error: "noch nicht synchronisiert" }); }
       if (p.startsWith("/api/session/")) { const id = decodeURIComponent(p.split("/")[3]); return sendJSON(res, 200, (snapshot.sessions || {})[id] || { id, fehlt: true }); }
       if (p.startsWith("/api/reel/")) { const [, , , sid, slug] = p.split("/").map(decodeURIComponent); return sendJSON(res, 200, (snapshot.reels || {})[sid + "/" + slug] || { fehlt: true }); }
       if (p.startsWith("/api/job/")) {
