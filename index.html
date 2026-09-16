@@ -102,10 +102,22 @@ body.schnitt main{width:380px;max-width:380px;margin:0;padding:14px 16px;box-siz
 body.schnitt h1{font-size:18px}
 .segl{font:12px/1.5 ui-monospace,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0;white-space:pre-wrap}
 </style>
+<style>
+#auftragKnopf .punkt{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.aufz{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.aufz:last-child{border-bottom:0}
+.aufz .dot{width:9px;height:9px;border-radius:50%;margin-top:5px;flex:0 0 auto}
+.aufz .dot.laeuft{background:#D2B48C;animation:pulsen 1.2s infinite}
+.aufz .dot.fertig{background:#4a9b6e}
+.aufz .dot.fehler{background:#c0522f}
+@keyframes pulsen{0%,100%{opacity:1}50%{opacity:.35}}
+.aufz b{font-size:13px;display:block}
+.aufz .erg{font-size:12px;color:var(--grey);white-space:pre-wrap;word-break:break-word}
+</style>
 </head>
 <body>
 <header><div class="brand">escape-cut <span style="color:var(--grey);font-weight:400;letter-spacing:0;text-transform:none"></span></div>
-<nav><button data-v="ueber" class="on">Übersicht</button><button data-v="eingang">1 · Rohmaterial</button><button data-v="vorschnitt">2 · Vorschnitt</button><button data-v="schnitt" id="navSchnitt" hidden>✂ Schnitt (CapCut)</button><button data-v="plan">3 · Contentplan</button><button data-v="kpi">4 · KPI</button><button data-v="lernen">Lernen</button></nav><span id="onlineStand" class="meta" hidden></span></header>
+<nav><button data-v="ueber" class="on">Übersicht</button><button data-v="eingang">1 · Rohmaterial</button><button data-v="vorschnitt">2 · Vorschnitt</button><button data-v="schnitt" id="navSchnitt" hidden>✂ Schnitt (CapCut)</button><button data-v="plan">3 · Contentplan</button><button data-v="kpi">4 · KPI</button><button data-v="lernen">Lernen</button></nav><span id="onlineStand" class="meta" hidden></span><button id="auftragKnopf" class="btn ghost" style="font-size:12px;padding:6px 12px;margin-left:auto" onclick="auftraegeZeigen()">Aufträge</button></header>
 <main id="main"></main>
 <div id="toast" class="toast" hidden></div>
 <script>
@@ -116,9 +128,50 @@ const LABEL={neu:'neu',ingest:'eingelesen',transkript:'Transkript',kandidaten:'K
 let S=null, view='ueber', cur={session:null,slug:null}, timers=[];
 const api=async(p,o)=>{const r=await fetch(p,o);return r.json()};
 const post=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+// ---------- Aufträge: was läuft, was fertig ist, mit Ergebnis und vollem Protokoll ----------
+function zeit(iso){if(!iso)return '';const d=new Date(iso);return d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}
+function dauer(a,b){if(!a||!b)return '';const s=Math.round((new Date(b)-new Date(a))/1000);return s<60?s+' s':Math.floor(s/60)+' min '+(s%60)+' s'}
+function auftragKnopfStand(){
+  const k=document.getElementById('auftragKnopf'); if(!k)return;
+  const l=(S&&S.protokoll)||[]; const laeuft=l.filter(a=>a.status==='läuft').length;
+  const letzte=l[0];
+  const farbe=laeuft?'#D2B48C':(letzte&&letzte.status==='fehler'?'#c0522f':'#4a9b6e');
+  k.innerHTML=`<span class="punkt" style="background:${farbe}${laeuft?';animation:pulsen 1.2s infinite':''}"></span>Aufträge${laeuft?' · '+laeuft+' läuft':''}`;
+}
+function auftraegeZeigen(){
+  const l=(S&&S.protokoll)||[];
+  const d=document.createElement('div'); d.className='modal'; d.id='aufModal';
+  d.innerHTML=`<div class="box" style="width:min(620px,94vw);max-height:86vh;overflow:auto">
+    <div class="row" style="justify-content:space-between;align-items:baseline">
+      <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:20px;margin:0">Aufträge</h2>
+      <button class="btn ghost" onclick="document.getElementById('aufModal').remove()">schließen</button></div>
+    <div style="margin-top:10px">${l.length?l.map(a=>`
+      <div class="aufz" onclick="auftragOeffnen('${esc(a.id)}')">
+        <span class="dot ${a.status==='läuft'?'laeuft':a.status==='fehler'?'fehler':'fertig'}"></span>
+        <div style="min-width:0;flex:1">
+          <b>${esc(a.was||a.cmd)}</b>
+          <span class="meta" style="font-size:11px">${zeit(a.start)}${a.ende?' · '+dauer(a.start,a.ende):' · läuft'}</span>
+          ${a.ergebnis?`<div class="erg">${esc(String(a.ergebnis).slice(0,260))}</div>`:''}
+        </div></div>`).join(''):'<p class="meta">Noch keine Aufträge.</p>'}</div></div>`;
+  d.onclick=(e)=>{if(e.target===d)d.remove()};
+  document.body.appendChild(d);
+}
+async function auftragOeffnen(id){
+  const a=await api('/api/auftrag/'+encodeURIComponent(id));
+  const d=document.createElement('div'); d.className='modal'; d.id='aufDetail';
+  d.innerHTML=`<div class="box" style="width:min(680px,95vw);max-height:88vh;overflow:auto">
+    <div class="row" style="justify-content:space-between;align-items:baseline">
+      <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:19px;margin:0">${esc(a.was||a.cmd||id)}</h2>
+      <button class="btn ghost" onclick="document.getElementById('aufDetail').remove()">schließen</button></div>
+    <p class="meta" style="font-size:12px;margin:6px 0 0">${esc(a.status||'')} · ${zeit(a.start)}${a.ende?' – '+zeit(a.ende)+' ('+dauer(a.start,a.ende)+')':''}</p>
+    ${a.ergebnis?`<div class="sec"><h2>Ergebnis</h2><div style="font-size:13px;white-space:pre-wrap">${esc(a.ergebnis)}</div></div>`:''}
+    ${a.log?`<div class="sec"><h2>Protokoll</h2><pre style="font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:40vh;overflow:auto;background:var(--navy3);padding:10px;border-radius:8px">${esc(a.log)}</pre></div>`:''}</div>`;
+  d.onclick=(e)=>{if(e.target===d)d.remove()};
+  document.body.appendChild(d);
+}
 function toast(t,ms=4000){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(e._t);e._t=setTimeout(()=>e.hidden=true,ms)}
 function ladder(st){const i=LADDER.indexOf(st);return '<div class="ladder">'+LADDER.map((l,k)=>`<i class="${k<i?'done':k===i?'on':''}" title="${LABEL[l]}"></i>`).join('')+'</div>'}
-async function load(){S=await api('/api/state');if(window.HOSTED){api('/api/online').then(o=>{const e=$('#onlineStand');if(!e)return;e.hidden=false;e.textContent=o.stand?('Stand '+o.stand.replace('T',' ').slice(0,16)+(o.offen?' · '+o.offen+' offen':'')):'noch kein Sync'})}if(view==='reel'&&document.activeElement&&document.activeElement.tagName==='TEXTAREA')return;if(view!=='reel')render()}
+async function load(){S=await api('/api/state');auftragKnopfStand();if(window.HOSTED){api('/api/online').then(o=>{const e=$('#onlineStand');if(!e)return;e.hidden=false;e.textContent=o.stand?('Stand '+o.stand.replace('T',' ').slice(0,16)+(o.offen?' · '+o.offen+' offen':'')):'noch kein Sync'})}if(view==='reel'&&document.activeElement&&document.activeElement.tagName==='TEXTAREA')return;if(view!=='reel')render()}
 function nav(v,extra){view=v;Object.assign(cur,extra||{});document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));render()}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>nav(b.dataset.v));
 if(window.tetDesktop){const nb=document.getElementById('navSchnitt');if(nb)nb.hidden=false}
@@ -130,8 +183,30 @@ async function uploadFrei(inp){const f=inp.files[0];if(!f)return;toast('Lade fer
 async function upload(inp){const f=inp.files[0];if(!f)return;toast('Lade „'+f.name+'“ hoch … ('+Math.round(f.size/1e6)+' MB)');
  const r=await fetch('/api/upload?name='+encodeURIComponent(f.name),{method:'POST',body:f});const d=await r.json();
  toast(d.ok?'✓ Hochgeladen — liegt im Eingang als „'+d.id+'“':'Fehler beim Upload');load()}
-async function job(args,label){toast((label||args.join(' '))+(window.HOSTED?' … geht an den Rechner':' … läuft'));const {id,error}=await post('/api/job',{args});if(error)return toast(error);const box=$('#joblog');const t=setInterval(async()=>{const j=await api('/api/job/'+id);if(box){box.textContent=j.log.slice(-6000);box.scrollTop=1e9}if(j.status!=='läuft'){clearInterval(t);toast((label||args[0])+': '+j.status,6000);load()}},1500)}
-async function claude(stage,params,label){toast(label+' — Claude arbeitet … (kann einige Minuten dauern)',8000);const out=$('#claudeout');if(out)out.textContent='… Claude arbeitet';const r=await post('/api/claude',{stage,...params});if(out)out.textContent=r.error||r.reply;toast(r.error?r.error:label+' fertig',8000);load()}
+async function job(args,label){
+  toast((label||args.join(' '))+(window.HOSTED?' … geht an den Rechner':' … läuft'));
+  const {id,error}=await post('/api/job',{args});
+  if(error)return toast(error);
+  const box=$('#joblog');
+  const t=setInterval(async()=>{
+    const j=await api('/api/job/'+id);
+    if(box){box.textContent=(j.log||'').slice(-6000);box.scrollTop=1e9}
+    if(j.status!=='läuft'){
+      clearInterval(t);
+      await load();
+      // Anne 17.09.: nicht nur „fertig" — das Ergebnis muss sichtbar sein und anklickbar bleiben
+      if(!document.getElementById('aufDetail')) auftragOeffnen(id);
+      else toast((label||args[0])+': '+j.status,6000);
+    }
+  },1500)}
+async function claude(stage,params,label){
+  toast(label+' — Claude arbeitet … (kann einige Minuten dauern)',8000);
+  const out=$('#claudeout');if(out)out.textContent='… Claude arbeitet';
+  const r=await post('/api/claude',{stage,...params});
+  if(out)out.textContent=r.error||r.reply;
+  await load();
+  if(r.auftrag) auftragOeffnen(r.auftrag); else toast(r.error?r.error:label+' fertig',8000);
+}
 
 function render(){
   const m=$('#main'); if(!S){m.innerHTML='<p>lädt …</p>';return}
@@ -383,7 +458,7 @@ function vVorschnitt(){
     <div class="row" style="justify-content:space-between"><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span><span class="meta">${r.dauer_s?Math.round(r.dauer_s)+' s':''}</span></div>
     <h3 style="margin-top:8px">${esc(r.titel)}</h3>
     <div class="meta">${r.gerendert?`Viral ${r.viral?r.viral.score+'/'+r.viral.schwelle:'–'} · CTA ${esc(r.cta||'–')}`:'wird gerade gebaut …'}</div>
-    <div class="row" style="margin-top:10px"><button class="btn" onclick="event.stopPropagation();job(['dropbox-uebergabe','${esc(WORKP(sid))}/reels/${esc(r.slug)}'],'An CapCut übergeben');toast('Übergabe läuft: Quelle + Vorschnitt + Untertitel + Anleitung landen in Dropbox „Reels-Uebergabe/${esc(r.slug)}“. In CapCut Web aus Dropbox öffnen. Export nach „Reels-Freigabe“ → landet automatisch in 3 · Freigegeben.',10000)">▶ In CapCut bearbeiten</button><button class="btn ghost" onclick="event.stopPropagation();job(['capcut-draft','${esc(WORKP(sid))}/reels/${esc(r.slug)}'],'CapCut lokal öffnen')">auf diesem Mac öffnen</button></div>
+    <div class="row" style="margin-top:10px"><button class="btn" onclick="event.stopPropagation();job(['dropbox-uebergabe','${esc(WORKP(sid))}/reels/${esc(r.slug)}'],'An CapCut übergeben');toast('Übergabe läuft: Quelle + Vorschnitt + Untertitel + Anleitung landen in Dropbox „Reels-Uebergabe/${esc(r.slug)}“. In CapCut Web aus Dropbox öffnen. Export nach „Reels-Freigabe“ → landet automatisch in 3 · Freigegeben.',10000)">▶ In CapCut bearbeiten</button>${window.HOSTED?'':`<button class="btn ghost" onclick="event.stopPropagation();job(['capcut-draft','${esc(WORKP(sid))}/reels/${esc(r.slug)}'],'CapCut lokal öffnen')">auf diesem Mac öffnen</button>`}</div>
    </div>`).join('')}</div>`).join(''):''}`;
 }
 function vEingang(){
@@ -505,10 +580,12 @@ async function vReel(m){
     <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="claude('sicht',{session:'${esc(cur.session)}',slug:'${esc(cur.slug)}'},'QA-Sicht (Claude)')">Sicht prüfen</button>
     <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="claude('jury',{session:'${esc(cur.session)}',slug:'${esc(cur.slug)}'},'Viral-Jury (Claude)')">Viral-Check</button>
     <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['viral','${esc(dir)}'],'Viral-Score')">Score neu rechnen</button>
+    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['straffen','${esc(dir)}','--probe'],'Pausen prüfen')">Pausen prüfen</button>
+    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['straffen','${esc(dir)}'],'Pausen entfernen')">Pausen entfernen</button>
     <button class="btn ghost" ${d.status==='bereit'||d.status==='freigegeben'?'':'disabled'} onclick="job(['schedule','${esc(dir)}'],'Einplanen (Metricool)')">Einplanen</button>
-    <button class="btn ghost" onclick="job(['capcut-draft','${esc(dir)}'],'CapCut-Projekt bauen')">CapCut auf diesem Mac öffnen</button>
+    ${window.HOSTED?'':`<button class="btn ghost" onclick="job(['capcut-draft','${esc(dir)}'],'CapCut-Projekt bauen')">CapCut auf diesem Mac öffnen</button>`}
     <button class="btn ghost" onclick="job(['capcut-paket','${esc(dir)}'],'CapCut-Paket bauen')">CapCut-Paket bauen</button>
-    <a class="btn ghost" style="text-decoration:none" href="${base}/capcut-draft-paket.zip" download>Paket laden</a></div>
+    ${window.HOSTED?'':`<a class="btn ghost" style="text-decoration:none" href="${base}/capcut-draft-paket.zip" download>Paket laden</a>`}</div>
   <div class="two"><div>
     ${d.dateien.video?`<video controls preload="metadata" src="${(window.HOSTED&&d.videoKlein)?d.videoKlein:base+'/render/reel.mp4?'+d.mtime}"></video>`:''}
     <div class="sec"><h2>Schnitt · Etappe 1</h2><div id="schnitt" class="meta">lädt …</div></div>
@@ -729,6 +806,74 @@ function matAnsehen(id){
   d.onclick=(e)=>{if(e.target===d)d.remove()};
   document.body.appendChild(d);
 }
+// Redaktionsplan-Eintrag: Tag und Uhrzeit aendern (Anne 17.09.: „ein reel das ich nicht bearbeiten kann")
+function rpAendern(datum, material){
+  const e=(S.redaktionsplan||[]).find(x=>x.datum===datum&&(x.material||'')===material);
+  if(!e)return toast('Eintrag nicht gefunden');
+  const m=(MATERIAL||[]).find(y=>y.id===material);
+  const tage=[...Array(21)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d.toISOString().slice(0,10)});
+  const zeiten=['08:00','11:30','14:00','17:00','20:00'];
+  if(e.uhrzeit&&!zeiten.includes(e.uhrzeit))zeiten.unshift(e.uhrzeit);
+  const d=document.createElement('div'); d.className='modal'; d.id='rpModal';
+  d.innerHTML=`<div class="box" style="width:min(520px,94vw)">
+    <div class="row" style="justify-content:space-between;align-items:baseline">
+      <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:19px;margin:0">${esc(e.thema||(m&&m.titel)||material||'Eintrag')}</h2>
+      <button class="btn ghost" onclick="document.getElementById('rpModal').remove()">schließen</button></div>
+    <p class="meta" style="font-size:12px;margin:6px 0 0">${esc(e.format||'')} · geplant ${esc(e.datum)} ${esc(e.uhrzeit||'')}</p>
+    <div class="row" style="gap:8px;align-items:center;margin-top:14px">
+      <select id="raTag" class="btn ghost" style="padding:7px 10px">${tage.map(t=>`<option value="${t}"${t===e.datum?' selected':''}>${t}</option>`).join('')}</select>
+      <select id="raZeit" class="btn ghost" style="padding:7px 10px">${zeiten.map(z=>`<option value="${z}"${z===e.uhrzeit?' selected':''}>${z}</option>`).join('')}</select>
+      <button class="btn" onclick="rpAendernOk('${esc(datum)}','${esc(material)}')">Übernehmen</button>
+      ${material?`<button class="btn ghost" onclick="document.getElementById('rpModal').remove();matAnsehen('${esc(material)}')">Ansehen</button>`:''}
+    </div></div>`;
+  d.onclick=(ev)=>{if(ev.target===d)d.remove()};
+  document.body.appendChild(d);
+}
+function rpAendernOk(datum, material){
+  const t=document.getElementById('raTag').value, z=document.getElementById('raZeit').value;
+  document.getElementById('rpModal').remove();
+  const plan=(S.redaktionsplan||[]).map(x=>(x.datum===datum&&(x.material||'')===material)?{...x,datum:t,uhrzeit:z}:x);
+  post('/api/redaktionsplan',{plan}).then(()=>{toast('verschoben auf '+t+' '+z);load()});
+}
+// Ein eingeplanter Beitrag: ansehen, verschieben, absagen (Anne 17.09.)
+const SLOTS=['08:00','11:30','14:00','17:00','20:00'];
+function planEintrag(unter){
+  if(!unter)return;
+  const a=(S.auftraege||[]).find(x=>x.unter===unter); if(!a)return toast('Eintrag nicht gefunden');
+  const m=(MATERIAL||[]).find(y=>y.id===a.material);
+  const tage=[...Array(21)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d.toISOString().slice(0,10)});
+  const zeiten=SLOTS.includes(a.uhrzeit)?SLOTS:[a.uhrzeit,...SLOTS];
+  const schau = m && m.video ? `<video src="${m.video}" controls preload="metadata" playsinline style="width:100%;max-height:46vh;border-radius:12px;background:#000"></video>`
+              : m && (m.coverBild||m.bild) ? `<img src="${m.coverBild||m.bild}" style="width:170px;border-radius:10px;display:block">` : '';
+  const d=document.createElement('div'); d.className='modal'; d.id='peModal';
+  d.innerHTML=`<div class="box" style="width:min(600px,94vw);max-height:88vh;overflow:auto">
+    <div class="row" style="justify-content:space-between;align-items:baseline">
+      <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:20px;margin:0">${esc(a.titel||a.thema||a.typ)}</h2>
+      <button class="btn ghost" onclick="document.getElementById('peModal').remove()">schließen</button></div>
+    <p class="meta" style="font-size:12px;margin:6px 0 0">${esc(a.typ||'')} · geplant ${esc(a.datum)} ${esc(a.uhrzeit||'')} · Status ${esc(a.status||'')}${a.metricool_id?' · Metricool '+esc(a.metricool_id):''}</p>
+    ${a.fehler?`<p style="color:var(--red);font-size:13px">${esc(a.fehler)}</p>`:''}
+    <div style="margin-top:12px">${schau}</div>
+    ${m&&m.caption?`<div class="sec"><h2>Caption</h2><div style="font-size:13px;white-space:pre-wrap;color:var(--grey)">${esc(String(m.caption).slice(0,1200))}</div></div>`:''}
+    <div class="sec"><h2>Termin ändern</h2>
+      <div class="row" style="gap:8px;align-items:center">
+        <select id="peTag" class="btn ghost" style="padding:7px 10px">${tage.map(t=>`<option value="${t}"${t===a.datum?' selected':''}>${t}</option>`).join('')}</select>
+        <select id="peZeit" class="btn ghost" style="padding:7px 10px">${zeiten.map(z=>`<option value="${z}"${z===a.uhrzeit?' selected':''}>${z}</option>`).join('')}</select>
+        <button class="btn" onclick="planVerschieben('${esc(unter)}')">Verschieben</button>
+        <button class="btn ghost" onclick="planAbsagen('${esc(unter)}')">Aus dem Plan nehmen</button>
+      </div></div></div>`;
+  d.onclick=(e)=>{if(e.target===d)d.remove()};
+  document.body.appendChild(d);
+}
+function planVerschieben(unter){
+  const t=document.getElementById('peTag').value, z=document.getElementById('peZeit').value;
+  document.getElementById('peModal').remove();
+  job(['verschieben',unter,t,'--uhrzeit',z],'Verschieben auf '+t+' '+z);
+}
+function planAbsagen(unter){
+  if(!confirm('Diesen Beitrag aus dem Plan nehmen?'))return;
+  document.getElementById('peModal').remove();
+  job(['absagen',unter],'Aus dem Plan nehmen');
+}
 // Drag & Drop: Material auf einen Tag oder eine Uhrzeit ziehen
 let ZIEHT=null;
 function planZieht(id){ZIEHT=id}
@@ -781,13 +926,14 @@ function vPlan(){
       ${rhythmus.length?`<div class="tagesplan">${rhythmus.map(e=>esc([e.wer,e.format,e.thema].filter(Boolean).join(' · '))).join('<br>')}</div>`:''}
       ${(()=>{const e=[];
         ((S.metricool_kalender||{}).posts||[]).filter(x=>x.datum===k).forEach(x=>e.push({z:x.uhrzeit||'',h:`<div class="slot mc" title="${esc(x.text||'')}"><span class="zeit">${esc(x.uhrzeit)}</span> <span class="pill">${esc(x.typ)}</span><div class="netz">${esc((x.netzwerke||[]).join(' · '))}</div>${x.text?`<div style="font-size:11px;line-height:1.3;margin-top:3px;color:var(--grey)">${esc(x.text.slice(0,70))}…</div>`:''}${x.url?`<a href="${esc(x.url)}" target="_blank" class="netz">ansehen ↗</a>`:''}</div>`}));
-        auf.forEach(a=>e.push({z:a.uhrzeit||'',h:`<div class="slot plan"><span class="zeit">${esc(a.uhrzeit||'')}</span> ${esc(a.thema||a.titel||a.typ||'')}<div class="netz">${esc(a.status||'')}</div></div>`}));
+        auf.forEach(a=>e.push({z:a.uhrzeit||'',h:`<div class="slot plan" style="cursor:pointer" onclick="planEintrag('${esc(a.unter||'')}')"><span class="zeit">${esc(a.uhrzeit||'')}</span> ${esc(a.thema||a.titel||a.typ||'')}<div class="netz">${esc(a.status||'')} · ansehen &amp; ändern</div></div>`}));
         rs.forEach(r=>e.push({z:r.slot||'',h:`<div class="slot plan"><span class="zeit">${esc(r.slot||'')}</span> ${esc(r.titel||(r.id||'').split('/').pop())}${r.gepostet?' ✓':''}</div>`}));
         rpk.forEach((x,xi)=>{const mat=(MATERIAL||[]).find(y=>y.id===x.material);
           const titel=x.thema||(mat&&mat.titel)||(x.material||'').split(':').pop()||x.format||'Beitrag';
           e.push({z:x.uhrzeit||'',h:`<div class="slot rp"><span class="zeit">${esc(x.uhrzeit||'')}</span> <span class="pill">${esc(x.format||'')}</span>
             <div style="font-size:12px;line-height:1.3;margin-top:3px">${esc(String(titel).slice(0,52))}</div>
             <div class="row" style="gap:6px;margin-top:4px">${x.material?`<a class="netz" style="cursor:pointer" onclick="matAnsehen('${esc(x.material)}')">ansehen</a>`:''}
+            <a class="netz" style="cursor:pointer" onclick="rpAendern('${esc(x.datum)}','${esc(x.material||'')}')">Termin ändern</a>
             <a class="netz" style="cursor:pointer" onclick="rpEntfernen('${esc(x.datum)}','${esc(x.material||'')}')">entfernen</a></div></div>`})});
         slots.forEach(x=>e.push({z:x,h:`<div class="slot frei" ondragover="planUeber(event)" ondragleave="planRaus(event)" ondrop="planDrop(event,'${k}','${esc(x)}')" onclick="planEinplanen('${k}','${esc(x)}')"><span class="zeit">${esc(x)}</span> <span class="netz">frei — hier einplanen</span></div>`}));
         return e.sort((a,b)=>String(a.z).localeCompare(String(b.z))).map(x=>x.h).join('')})()}
@@ -801,7 +947,7 @@ function vPlan(){
    <table id="rpTab"><tr><th>Datum</th><th>Format</th><th>Thema</th><th>Hook</th><th>CTA</th><th>Status</th><th>Einplanen</th></tr>
    ${rp.map((e,i)=>rpZeile(e,i)).join('')}</table>
    <div class="row" style="margin-top:10px;gap:8px"><button class="btn ghost" onclick="rpZeileNeu()">+ Zeile</button><button class="btn" onclick="rpSpeichern()">Redaktionsplan speichern</button><span class="meta" id="rpStatus"></span></div></div></div>
-  <div class="sec"><h2>Eingeplant</h2>${(S.auftraege||[]).length?`<table><tr><th>Datum</th><th>Typ</th><th>Titel</th><th>Status</th></tr>${(S.auftraege||[]).slice().reverse().map(a=>`<tr><td>${esc(a.datum)} ${esc(a.uhrzeit||'')}</td><td>${esc(a.typ)}</td><td>${esc(a.thema||a.titel)}</td><td><span class="pill ${a.status==='gepostet'?'freigegeben':''}">${esc(a.status)}${a.metricool_id?' · '+esc(a.metricool_id):''}</span>${a.fehler?'<br><small style="color:var(--red)">'+esc(a.fehler)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="meta">–</p>'}</div>
+  <div class="sec"><h2>Eingeplant</h2>${(S.auftraege||[]).length?`<table><tr><th>Datum</th><th>Typ</th><th>Titel</th><th>Status</th></tr>${(S.auftraege||[]).slice().reverse().map(a=>`<tr style="cursor:pointer" onclick="planEintrag('${esc(a.unter||'')}')"><td>${esc(a.datum)} ${esc(a.uhrzeit||'')}</td><td>${esc(a.typ)}</td><td>${esc(a.thema||a.titel)}</td><td><span class="pill ${a.status==='gepostet'?'freigegeben':''}">${esc(a.status)}${a.metricool_id?' · '+esc(a.metricool_id):''}</span>${a.fehler?'<br><small style="color:var(--red)">'+esc(a.fehler)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="meta">–</p>'}</div>
   <div class="sec"><h2>Material zum Einplanen</h2><div id="matBox">lädt …</div></div>
   <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>`;
 }
@@ -829,6 +975,8 @@ async function vKpi(m){
    <div class="kpi"><span>Leads aus Organic</span><input id="k_leads" type="number" value="${esc(mw.leads??'')}" placeholder="eintragen"></div>
    <div class="kpi"><span>Kontakte in den Circle</span><input id="k_circle" type="number" value="${esc(mw.circle??'')}" placeholder="eintragen"></div>
    <div class="kpi"><span>Umsatz aus Organic (€)</span><input id="k_umsatz" type="number" value="${esc(mw.umsatz??'')}" placeholder="eintragen"></div>
+   <div class="kpi"><span>ManyChat-Kontakte</span><input id="k_manychat" type="number" value="${esc(mw.manychat??'')}" placeholder="eintragen"></div>
+   <div class="kpi"><span>Notiz zum Dienstag</span><input id="k_notiz" type="text" value="${esc(mw.notiz??'')}" placeholder="optional"></div>
   </div>
   <div class="row"><button class="btn" onclick="kpiSpeichern('${kw}')">Meeting-Werte ${kw} speichern</button><span class="meta">${mw.stand?'zuletzt gespeichert '+esc(mw.stand.slice(0,16).replace('T',' ')):''}</span></div>
   <div class="kpi-grid" style="margin-top:18px">
@@ -842,7 +990,7 @@ async function vKpi(m){
   <div class="meta" style="margin-top:8px">Quelle: Apify-Profil-Scan (<code>_state/posts.json</code>, ${posts.length} Posts). Reichweite/Saves/Shares/Follows je Reel kommen über die Metricool-Routine, sobald sie Zahlen liefert (<code>_state/metricool-reels.json</code>).</div></div>
   <div class="sec"><h2>Konto-Verlauf</h2><table><tr><th>Datum</th><th>KW</th><th>Follower</th><th>Reichweite</th><th>Interaktionen</th></tr>${snaps.slice(-10).reverse().map(s=>`<tr><td>${esc(s.date||'')}</td><td>${esc(s.kw||'')}</td><td>${f(s.instagram?.followers)}</td><td>${f(s.instagram?.reach)}</td><td>${f(s.instagram?.interactions)}</td></tr>`).join('')}</table></div>`;
 }
-async function kpiSpeichern(kw){const werte={leads:+$('#k_leads').value||0,circle:+$('#k_circle').value||0,umsatz:+$('#k_umsatz').value||0};const r=await post('/api/kpi-meeting',{kw,werte});toast(r.ok?'✓ Meeting-Werte '+kw+' gespeichert':'Fehler beim Speichern');}
+async function kpiSpeichern(kw){const werte={leads:+$('#k_leads').value||0,circle:+$('#k_circle').value||0,umsatz:+$('#k_umsatz').value||0,manychat:+$('#k_manychat').value||0,notiz:$('#k_notiz').value||''};const r=await post('/api/kpi-meeting',{kw,werte});toast(r.ok?'✓ Meeting-Werte '+kw+' gespeichert':'Fehler beim Speichern');}
 function vLernen(){
   const reels=S.sessions.flatMap(s=>s.reels.filter(r=>r.viral).map(r=>({...r,session:s.id})));
   return `<h1>Lernen</h1>
