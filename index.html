@@ -110,6 +110,7 @@ function render(){
   if(view==='schnitt') return vSchnitt(m);
   if(view==='ueber') return vUeber(m);
   if(view==='eingang') return m.innerHTML=vEingang();
+  if(view==='storyroh') return vStoryRoh(m);
   if(view==='vorschnitt') return m.innerHTML=vVorschnitt();
   if(view==='frei') return nav('plan');
   if(view==='kpi') return vKpi(m);
@@ -195,7 +196,7 @@ function vUeber(m){
       <td>${esc(s.datum||'')}</td>
       <td><span class="pill ${esc(s.status)}">${esc(LABEL[s.status]||s.status)}</span></td>
       <td style="width:170px">${ladder(s.status)}</td></tr>`).join('');
-    const storyZeilen=sr.liste.map(s=>`<tr><td><b>${esc(s.name)}</b><br><small class="hint">${esc(s.quelle)}${s.einzeldatei?' · Einzeldatei':' · '+s.dateien+' Dateien'}</small></td>
+    const storyZeilen=sr.liste.map(s=>`<tr onclick="nav('storyroh',{name:'${esc(s.name).replace(/'/g,"\\'")}'})" style="cursor:pointer"><td><b>${esc(s.name)}</b><br><small class="hint">${esc(s.quelle)}${s.einzeldatei?' · Einzeldatei':' · '+s.dateien+' Dateien'}</small></td>
       <td>${esc(zeitseit(s.mtime))}</td></tr>`).join('');
     const kacheln=arc?arc.bilder.map(b=>`<figure style="margin:0">
       <a href="${b.url}" target="_blank"><img src="${b.url}" style="width:100%;border-radius:12px;border:1px solid var(--line);display:block"></a>
@@ -330,6 +331,18 @@ function vEingang(){
     <div class="meta">${esc(s.datum||'')} ${s.dauer_s?'· '+Math.round(s.dauer_s/60)+' min':''} ${s.dateien?'· '+s.dateien+' Dateien':''} ${s.kandidaten?'· '+s.kandidaten+' Kandidaten':''} ${s.reels.length?'· '+s.reels.length+' Reels':''}</div>
     ${ladder(s.status)}<div style='height:7px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden'><i style='display:block;height:100%;width:${s.fortschritt??0}%;background:linear-gradient(90deg,var(--camel),var(--yellow))'></i></div><div class='meta' style='margin-top:4px'>${s.fortschritt??0} % verarbeitet</div></div>`).join('')}</div>
   ${S.jobs.length?`<div class="sec"><h2>Letzte Läufe</h2><table>${S.jobs.map(j=>`<tr><td>${esc(j.start.slice(11,16))}</td><td>tet-reel ${esc(j.cmd)}</td><td><span class="pill ${j.status==='fehler'?'fehler':j.status==='fertig'?'ok':''}">${esc(j.status)}</span></td></tr>`).join('')}</table></div>`:''}`;
+}
+function srLaden(btn,url){btn.outerHTML=`<video src="${url}" controls autoplay preload="metadata" style="width:100%;max-width:240px;border-radius:10px"></video>`}
+function vStoryRoh(m){
+  m.innerHTML='<h1>'+esc(cur.name||'')+'</h1><div id="srBox">lädt …</div>';
+  api('/api/storyroh/'+encodeURIComponent(cur.name)).then(d=>{const b=$('#srBox');if(!b)return;
+    if(d.error){b.innerHTML='<p class="meta">'+esc(d.error)+'</p>';return}
+    b.innerHTML=`<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px"><span class="pill">${esc(d.quelle)}</span><span class="pill">${d.dateien.length} Datei(en)</span>${d.dropbox?`<a class="btn ghost" target="_blank" rel="noopener" href="${d.dropbox}">Dropbox-Ordner ↗</a>`:''}</div>
+    <div class="grid">${d.dateien.map(f=>`<div class="card"><b>${esc(f.name)}</b><div class="meta">${Math.round(f.groesse/1e6)} MB · ${esc(f.mtime)}</div>
+      <div class="srV" style="margin:8px 0">${f.lokal?`<video src="${f.url}" controls preload="metadata" style="width:100%;max-width:240px;border-radius:10px"></video>`:`<button class="btn ghost" onclick="srLaden(this,'${f.url}')">Vorschau laden (${Math.round(f.groesse/1e6)} MB)</button>`}</div>
+      <div class="row" style="gap:8px"><button class="btn" onclick="job(['story-heute','${esc(f.pfad).replace(/'/g,"\\'")}'],'Untertitel + sofort posten')">⚡ Untertitel + sofort posten</button></div></div>`).join('')}</div>
+    <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>`});
+  return '';
 }
 function vSession(){
   const s=S.sessions.find(x=>x.id===cur.session)||S.sessions[0]; if(!s) return '<p>keine Session</p>'; cur.session=s.id;
