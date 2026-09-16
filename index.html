@@ -711,14 +711,19 @@ function rpEntfernen(datum,material){
 function matAnsehen(id){
   const x=(MATERIAL||[]).find(y=>y.id===id); if(!x)return;
   const u=(f)=>'/datei?p='+encodeURIComponent(f);
-  const inhalt=(x.dateien||[]).map(f=>/\.(mp4|mov|m4v)$/i.test(f)
-    ? `<video src="${u(f)}" controls preload="metadata" style="width:100%;max-height:70vh;border-radius:12px;background:#000"></video>`
-    : `<img src="${u(f)}" style="width:100%;border-radius:10px;display:block;margin-bottom:8px">`).join('');
+  // Fertiges Reel: die kleine Web-Fassung des freigegebenen Exports, damit es auch online laeuft
+  const inhalt = x.video
+    ? `<video src="${x.video}" controls preload="metadata" playsinline style="width:100%;max-height:64vh;border-radius:12px;background:#000"></video>`
+    : (x.dateien||[]).map(f=>/\.(mp4|mov|m4v)$/i.test(f)
+        ? `<video src="${u(f)}" controls preload="metadata" playsinline style="width:100%;max-height:64vh;border-radius:12px;background:#000"></video>`
+        : `<img src="${u(f)}" style="width:100%;border-radius:10px;display:block;margin-bottom:8px">`).join('');
+  const cov = x.coverBild ? `<div class="sec"><h2>Cover</h2><img src="${x.coverBild}" style="width:180px;border-radius:10px;display:block"></div>` : '';
   const d=document.createElement('div'); d.className='modal'; d.id='matModal';
   d.innerHTML=`<div class="box" style="width:min(560px,94vw);max-height:88vh;overflow:auto">
     <div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:20px;margin:0">${esc(x.titel||x.id)}</h2>
     <button class="btn ghost" onclick="document.getElementById('matModal').remove()">schließen</button></div>
     <div style="margin-top:12px">${inhalt}</div>
+    ${cov}
     ${x.caption?`<div class="sec"><h2>Caption</h2><div style="font-size:13px;white-space:pre-wrap;color:var(--grey)">${esc(String(x.caption).slice(0,1200))}</div></div>`:''}
     <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="document.getElementById('matModal').remove();planEinplanen(null,null,'${esc(x.id)}')">Einplanen</button></div></div>`;
   d.onclick=(e)=>{if(e.target===d)d.remove()};
@@ -750,12 +755,13 @@ function vPlan(){
     if(!m.length){box.innerHTML='<p class="meta">lädt …</p>';return}
     const heute=fmt(new Date());
     const gruppen=[['Reel','Reels'],['Karussell','Karussells'],['Story','Storys']];
-    const vorschau=(x)=>{const f=(x.dateien||[])[0]||'';const u='/datei?p='+encodeURIComponent(f);
+    const vorschau=(x)=>{if(x.coverBild||x.bild)return `<img src="${x.coverBild||x.bild}" alt="">`;
+      const f=(x.dateien||[])[0]||'';const u='/datei?p='+encodeURIComponent(f);
       return /\.(mp4|mov|m4v)$/i.test(f)?`<video src="${u}" preload="metadata" muted></video>`:`<img src="${u}" alt="">`};
     box.innerHTML=gruppen.map(([typ,titel])=>{const xs=m.filter(x=>x.typ===typ);
       return xs.length?`<div class="matgruppe"><h3>${titel} · ${xs.length}</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${xs.map(x=>`
         <div class="matkarte" draggable="true" ondragstart="planZieht('${esc(x.id)}');event.dataTransfer.setData('text/plain','${esc(x.id)}')" title="In den Kalender ziehen">
-          ${vorschau(x)}
+          <span style="cursor:zoom-in" onclick="matAnsehen('${esc(x.id)}')">${vorschau(x)}</span>
           <div style="min-width:0;flex:1"><b style="display:block;font-size:13px;line-height:1.25;cursor:${x.typ==='Karussell'?'pointer':'default'}" ${x.typ==='Karussell'?`onclick="nav('karussell',{name:'${esc(x.titel)}'})"`:''}>${esc((x.titel||x.id).slice(0,46))}</b>
           <span class="meta" style="font-size:11px">${x.alter_tage===0?'heute':x.alter_tage+' Tage alt'}</span>
           <div class="row" style="margin-top:6px;gap:6px"><button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="matAnsehen('${esc(x.id)}')">Ansehen</button><button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="planEinplanen('${heute}',null,'${esc(x.id)}')">Einplanen</button>${x.typ==='Karussell'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.titel)}'})">Bearbeiten</button>`:''}</div></div>
