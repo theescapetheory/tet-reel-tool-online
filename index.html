@@ -632,7 +632,7 @@ function planPflege(was){const b=document.getElementById(was==='pp'?'ppBox':'rpB
 function planEinplanen(datum, zeit, matId){
   const m=MATERIAL||[];
   if(!m.length)return toast('Kein einplanbares Material gefunden');
-  const slots=['09:02','11:30','14:00','17:00','19:00','20:00'];
+  const slots=['08:00','11:30','14:00','17:00','20:00'];
   if(zeit&&!slots.includes(zeit))slots.unshift(zeit);
   const d=document.createElement('div'); d.className='modal'; d.id='planModal';
   d.innerHTML=`<div class="box"><h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:22px">Einplanen am ${esc(datum)}</h2>
