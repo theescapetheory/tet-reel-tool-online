@@ -654,7 +654,8 @@ function vPlan(){
       <a class="btn ghost" style="text-decoration:none" href="${r.video||'/ready/'+encodeURIComponent(r.slug)+'/reel.mp4'}" download>Video</a></div></div>`}).join(''):''}),50);
   const mk=S.metricool_kalender||null;
   return `<h1>Contentplan</h1>
-  <div class="meta" style="margin:-4px 0 14px">${mk?`Metricool · Stand ${esc(mk.stand||'').replace('T',' ')} · ${(mk.posts||[]).length} Beiträge`:'Metricool-Kalender noch nicht geholt'}</div>
+  <div class="row" style="margin:-4px 0 14px;gap:10px;align-items:center"><span class="meta">${mk?`Metricool · Stand ${esc(mk.stand||'').replace('T',' ')} · ${(mk.posts||[]).length} Beiträge`:'Metricool-Kalender noch nicht geholt'}</span>
+  <button class="btn ghost" style="font-size:12px;padding:5px 11px" onclick="job(['kalender'],'Kalender holen')">aktualisieren</button></div>
   
   <div class="kal">${days.map(d=>{const k=fmt(d);const kurz=['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()];
     const slots=(p.slots||{})[k]||[];const rs=(p.reels||[]).filter(r=>(r.when||'').startsWith(k)||r.tag===k);const rpk=rp.filter(e=>e.datum===k);
