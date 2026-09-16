@@ -685,21 +685,45 @@ async function rpEinplanen(btn){const tr=btn.closest('tr');const g=k=>(tr.queryS
 function planPflege(was){const b=document.getElementById(was==='pp'?'ppBox':'rpBox');if(b)b.hidden=!b.hidden}
 // Reel oder Story auf einen Tag legen — eigener Dialog, kein Browser-Popup
 function planEinplanen(datum, zeit, matId){
+  datum=datum||fmt(new Date());
   const m=MATERIAL||[];
   if(!m.length)return toast('Kein einplanbares Material gefunden');
   const slots=['08:00','11:30','14:00','17:00','20:00'];
   if(zeit&&!slots.includes(zeit))slots.unshift(zeit);
   const d=document.createElement('div'); d.className='modal'; d.id='planModal';
-  d.innerHTML=`<div class="box"><h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:22px">Einplanen am ${esc(datum)}</h2>
+  const tage=[...Array(14)].map((_,i)=>{const x=new Date();x.setDate(x.getDate()+i);return x});
+  d.innerHTML=`<div class="box"><h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:22px">Einplanen</h2>
     <label>Beitrag</label><select id="pmMat">${m.map(x=>`<option value="${esc(x.id)}"${matId===x.id?' selected':''}>${esc(x.typ||'')} · ${esc(x.titel||x.id)}${x.alter_tage!=null?' · '+(x.alter_tage===0?'heute':x.alter_tage+' Tage alt'):''}</option>`).join('')}</select>
+    <label>Tag</label><select id="pmTag">${tage.map(x=>{const k=fmt(x);return `<option value="${k}"${k===datum?' selected':''}>${['So','Mo','Di','Mi','Do','Fr','Sa'][x.getDay()]} ${x.getDate()}.${x.getMonth()+1}.</option>`}).join('')}</select>
     <label>Uhrzeit</label><select id="pmZeit">${slots.map(x=>`<option${x===(zeit||'11:30')?' selected':''}>${x}</option>`).join('')}</select>
     <div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn ghost" onclick="planModalZu()">Abbrechen</button>
-    <button class="btn" onclick="planModalOk('${esc(datum)}')">Einplanen</button></div></div>`;
+    <button class="btn" onclick="planModalOk()">Einplanen</button></div></div>`;
   d.onclick=(e)=>{if(e.target===d)planModalZu()};
   document.body.appendChild(d);
 }
 function reelTechnik(){const e=document.getElementById('reelTechnik');if(e)e.hidden=!e.hidden}
 function planModalZu(){const d=document.getElementById('planModal');if(d)d.remove()}
+function rpEntfernen(datum,material){
+  if(!confirm('Diesen Eintrag aus dem Plan nehmen?'))return;
+  const plan=(S.redaktionsplan||[]).filter(x=>!(x.datum===datum&&(x.material||'')===material));
+  post('/api/redaktionsplan',{plan}).then(()=>{toast('entfernt');load()})}
+// Material ansehen, bevor es eingeplant wird
+function matAnsehen(id){
+  const x=(MATERIAL||[]).find(y=>y.id===id); if(!x)return;
+  const u=(f)=>'/datei?p='+encodeURIComponent(f);
+  const inhalt=(x.dateien||[]).map(f=>/\.(mp4|mov|m4v)$/i.test(f)
+    ? `<video src="${u(f)}" controls preload="metadata" style="width:100%;max-height:70vh;border-radius:12px;background:#000"></video>`
+    : `<img src="${u(f)}" style="width:100%;border-radius:10px;display:block;margin-bottom:8px">`).join('');
+  const d=document.createElement('div'); d.className='modal'; d.id='matModal';
+  d.innerHTML=`<div class="box" style="width:min(560px,94vw);max-height:88vh;overflow:auto">
+    <div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:20px;margin:0">${esc(x.titel||x.id)}</h2>
+    <button class="btn ghost" onclick="document.getElementById('matModal').remove()">schließen</button></div>
+    <div style="margin-top:12px">${inhalt}</div>
+    ${x.caption?`<div class="sec"><h2>Caption</h2><div style="font-size:13px;white-space:pre-wrap;color:var(--grey)">${esc(String(x.caption).slice(0,1200))}</div></div>`:''}
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" onclick="document.getElementById('matModal').remove();planEinplanen(null,null,'${esc(x.id)}')">Einplanen</button></div></div>`;
+  d.onclick=(e)=>{if(e.target===d)d.remove()};
+  document.body.appendChild(d);
+}
 // Drag & Drop: Material auf einen Tag oder eine Uhrzeit ziehen
 let ZIEHT=null;
 function planZieht(id){ZIEHT=id}
@@ -709,8 +733,8 @@ function planDrop(ev,datum,zeit){ev.preventDefault();ev.currentTarget.classList.
   else planEinplanen(datum,null,id)}
 function planUeber(ev){ev.preventDefault();ev.currentTarget.classList.add('drauf')}
 function planRaus(ev){ev.currentTarget.classList.remove('drauf')}
-function planModalOk(datum){
-  const id=document.getElementById('pmMat').value, zeit=document.getElementById('pmZeit').value;
+function planModalOk(){
+  const id=document.getElementById('pmMat').value, zeit=document.getElementById('pmZeit').value, datum=document.getElementById('pmTag').value;
   planModalZu(); job(['einplanen',id,datum,'--uhrzeit',zeit],'Einplanen am '+datum+' um '+zeit);
 }
 function vPlan(){
@@ -734,7 +758,7 @@ function vPlan(){
           ${vorschau(x)}
           <div style="min-width:0;flex:1"><b style="display:block;font-size:13px;line-height:1.25;cursor:${x.typ==='Karussell'?'pointer':'default'}" ${x.typ==='Karussell'?`onclick="nav('karussell',{name:'${esc(x.titel)}'})"`:''}>${esc((x.titel||x.id).slice(0,46))}</b>
           <span class="meta" style="font-size:11px">${x.alter_tage===0?'heute':x.alter_tage+' Tage alt'}</span>
-          <div class="row" style="margin-top:6px;gap:6px"><button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="planEinplanen('${heute}',null,'${esc(x.id)}')">Einplanen</button>${x.typ==='Karussell'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.titel)}'})">Bearbeiten</button>`:''}</div></div>
+          <div class="row" style="margin-top:6px;gap:6px"><button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="matAnsehen('${esc(x.id)}')">Ansehen</button><button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="planEinplanen('${heute}',null,'${esc(x.id)}')">Einplanen</button>${x.typ==='Karussell'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.titel)}'})">Bearbeiten</button>`:''}</div></div>
         </div>`).join('')}</div></div>`:''}).join('')||'<p class="meta">Nichts Einplanbares gefunden.</p>'};
   setTimeout(()=>window.matRender(),60);
 
@@ -753,7 +777,12 @@ function vPlan(){
         ((S.metricool_kalender||{}).posts||[]).filter(x=>x.datum===k).forEach(x=>e.push({z:x.uhrzeit||'',h:`<div class="slot mc" title="${esc(x.text||'')}"><span class="zeit">${esc(x.uhrzeit)}</span> <span class="pill">${esc(x.typ)}</span><div class="netz">${esc((x.netzwerke||[]).join(' · '))}</div>${x.text?`<div style="font-size:11px;line-height:1.3;margin-top:3px;color:var(--grey)">${esc(x.text.slice(0,70))}…</div>`:''}${x.url?`<a href="${esc(x.url)}" target="_blank" class="netz">ansehen ↗</a>`:''}</div>`}));
         auf.forEach(a=>e.push({z:a.uhrzeit||'',h:`<div class="slot plan"><span class="zeit">${esc(a.uhrzeit||'')}</span> ${esc(a.thema||a.titel||a.typ||'')}<div class="netz">${esc(a.status||'')}</div></div>`}));
         rs.forEach(r=>e.push({z:r.slot||'',h:`<div class="slot plan"><span class="zeit">${esc(r.slot||'')}</span> ${esc(r.titel||(r.id||'').split('/').pop())}${r.gepostet?' ✓':''}</div>`}));
-        rpk.forEach(x=>e.push({z:'',h:`<div class="slot rp">${esc(x.format||'')} · ${esc(x.thema||'')}${x.reel?' ✓':''}</div>`}));
+        rpk.forEach((x,xi)=>{const mat=(MATERIAL||[]).find(y=>y.id===x.material);
+          const titel=x.thema||(mat&&mat.titel)||(x.material||'').split(':').pop()||x.format||'Beitrag';
+          e.push({z:x.uhrzeit||'',h:`<div class="slot rp"><span class="zeit">${esc(x.uhrzeit||'')}</span> <span class="pill">${esc(x.format||'')}</span>
+            <div style="font-size:12px;line-height:1.3;margin-top:3px">${esc(String(titel).slice(0,52))}</div>
+            <div class="row" style="gap:6px;margin-top:4px">${x.material?`<a class="netz" style="cursor:pointer" onclick="matAnsehen('${esc(x.material)}')">ansehen</a>`:''}
+            <a class="netz" style="cursor:pointer" onclick="rpEntfernen('${esc(x.datum)}','${esc(x.material||'')}')">entfernen</a></div></div>`})});
         slots.forEach(x=>e.push({z:x,h:`<div class="slot frei" ondragover="planUeber(event)" ondragleave="planRaus(event)" ondrop="planDrop(event,'${k}','${esc(x)}')" onclick="planEinplanen('${k}','${esc(x)}')"><span class="zeit">${esc(x)}</span> <span class="netz">frei — hier einplanen</span></div>`}));
         return e.sort((a,b)=>String(a.z).localeCompare(String(b.z))).map(x=>x.h).join('')})()}
       <button class="tagplus" onclick="planEinplanen('${k}')">+ einplanen</button></div>`}).join('')}</div>
