@@ -510,7 +510,7 @@ async function vReel(m){
     <button class="btn ghost" onclick="job(['capcut-paket','${esc(dir)}'],'CapCut-Paket bauen')">CapCut-Paket bauen</button>
     <a class="btn ghost" style="text-decoration:none" href="${base}/capcut-draft-paket.zip" download>Paket laden</a></div>
   <div class="two"><div>
-    ${d.dateien.video?`<video controls preload="metadata" src="${base}/render/reel.mp4?${d.mtime}"></video>`:''}
+    ${d.dateien.video?`<video controls preload="metadata" src="${(window.HOSTED&&d.videoKlein)?d.videoKlein:base+'/render/reel.mp4?'+d.mtime}"></video>`:''}
     <div class="sec"><h2>Schnitt · Etappe 1</h2><div id="schnitt" class="meta">lädt …</div></div>
     ${v?`<div class="sec"><h2>Viral-Check</h2><div class="score"><div class="ring" style="--v:${v.score}"><span>${v.score}</span></div><div><b>${v.ueber_schwelle?'über':'unter'} Schwelle ${v.schwelle}</b><br><small class="hint">Heuristik ${v.teile?.heuristik??'–'} · Jury ${v.teile?.jury??'–'} · Korridor Median ${v.teile?.korridor?.konto_median_plays??'–'} Plays</small></div></div>
       ${(v.gruende||[]).length?'<ul style="margin:10px 0 0 18px;font-size:14px">'+v.gruende.map(g=>'<li>'+esc(g)+'</li>').join('')+'</ul>':''}
