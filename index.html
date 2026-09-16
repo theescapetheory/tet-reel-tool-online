@@ -627,7 +627,7 @@ function planEinplanen(datum){
   const slots=['09:02','11:30','14:00','17:00','19:00','20:00'];
   const d=document.createElement('div'); d.className='modal'; d.id='planModal';
   d.innerHTML=`<div class="box"><h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:22px">Einplanen am ${esc(datum)}</h2>
-    <label>Beitrag</label><select id="pmMat">${m.map(x=>`<option value="${esc(x.id)}">${esc(x.titel||x.id)} · ${esc(x.typ||'')}</option>`).join('')}</select>
+    <label>Beitrag</label><select id="pmMat">${m.map(x=>`<option value="${esc(x.id)}">${esc(x.typ||'')} · ${esc(x.titel||x.id)}${x.alter_tage!=null?' · '+(x.alter_tage===0?'heute':x.alter_tage+' Tage alt'):''}</option>`).join('')}</select>
     <label>Uhrzeit</label><select id="pmZeit">${slots.map(x=>`<option${x==='11:30'?' selected':''}>${x}</option>`).join('')}</select>
     <div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn ghost" onclick="planModalZu()">Abbrechen</button>
     <button class="btn" onclick="planModalOk('${esc(datum)}')">Einplanen</button></div></div>`;
