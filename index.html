@@ -78,6 +78,14 @@ th{color:var(--grey);font-size:11px;text-transform:uppercase;letter-spacing:.12e
 .slot.mc{border-left-color:#e1306c;background:#fdf3f7}
 .slot.plan{border-left-color:var(--navy);background:#eef2f9}
 .slot.rp{border-left-color:var(--camelbg);background:#faf6f0}
+.slot.frei{cursor:pointer;border-left-color:#dbe3ec;background:transparent;color:var(--grey)}
+.slot.frei:hover{background:var(--navy3);border-left-color:var(--navy);color:var(--navy)}
+.day.drauf,.slot.drauf{outline:2px dashed var(--navy);outline-offset:2px;background:var(--navy3)}
+.matkarte{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:grab;display:flex;gap:10px;align-items:center}
+.matkarte:active{cursor:grabbing}
+.matkarte video,.matkarte img{width:54px;height:96px;object-fit:cover;border-radius:7px;background:#000;border:0}
+.matgruppe{margin-bottom:16px}
+.matgruppe h3{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--grey);margin-bottom:8px}
 .slot .zeit{font-weight:700;font-size:12px}
 .slot .netz{font-size:10px;color:var(--grey);letter-spacing:.04em;text-transform:uppercase}
 .tagplus{width:100%;margin-top:auto;font-size:12px;padding:6px;border:1px dashed #cfd8e4;background:transparent;color:var(--grey);border-radius:9px;cursor:pointer}
@@ -621,14 +629,15 @@ async function rpEinplanen(btn){const tr=btn.closest('tr');const g=k=>(tr.queryS
   job(['einplanen',mat,datum,'--uhrzeit',uhr,'--thema',thema],'Einplanen '+datum+' '+uhr)}
 function planPflege(was){const b=document.getElementById(was==='pp'?'ppBox':'rpBox');if(b)b.hidden=!b.hidden}
 // Reel oder Story auf einen Tag legen — eigener Dialog, kein Browser-Popup
-function planEinplanen(datum){
+function planEinplanen(datum, zeit, matId){
   const m=MATERIAL||[];
   if(!m.length)return toast('Kein einplanbares Material gefunden');
   const slots=['09:02','11:30','14:00','17:00','19:00','20:00'];
+  if(zeit&&!slots.includes(zeit))slots.unshift(zeit);
   const d=document.createElement('div'); d.className='modal'; d.id='planModal';
   d.innerHTML=`<div class="box"><h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:22px">Einplanen am ${esc(datum)}</h2>
-    <label>Beitrag</label><select id="pmMat">${m.map(x=>`<option value="${esc(x.id)}">${esc(x.typ||'')} · ${esc(x.titel||x.id)}${x.alter_tage!=null?' · '+(x.alter_tage===0?'heute':x.alter_tage+' Tage alt'):''}</option>`).join('')}</select>
-    <label>Uhrzeit</label><select id="pmZeit">${slots.map(x=>`<option${x==='11:30'?' selected':''}>${x}</option>`).join('')}</select>
+    <label>Beitrag</label><select id="pmMat">${m.map(x=>`<option value="${esc(x.id)}"${matId===x.id?' selected':''}>${esc(x.typ||'')} · ${esc(x.titel||x.id)}${x.alter_tage!=null?' · '+(x.alter_tage===0?'heute':x.alter_tage+' Tage alt'):''}</option>`).join('')}</select>
+    <label>Uhrzeit</label><select id="pmZeit">${slots.map(x=>`<option${x===(zeit||'11:30')?' selected':''}>${x}</option>`).join('')}</select>
     <div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn ghost" onclick="planModalZu()">Abbrechen</button>
     <button class="btn" onclick="planModalOk('${esc(datum)}')">Einplanen</button></div></div>`;
   d.onclick=(e)=>{if(e.target===d)planModalZu()};
@@ -636,27 +645,44 @@ function planEinplanen(datum){
 }
 function reelTechnik(){const e=document.getElementById('reelTechnik');if(e)e.hidden=!e.hidden}
 function planModalZu(){const d=document.getElementById('planModal');if(d)d.remove()}
+// Drag & Drop: Material auf einen Tag oder eine Uhrzeit ziehen
+let ZIEHT=null;
+function planZieht(id){ZIEHT=id}
+function planDrop(ev,datum,zeit){ev.preventDefault();ev.currentTarget.classList.remove('drauf');
+  const id=ZIEHT||ev.dataTransfer.getData('text/plain');ZIEHT=null;if(!id)return;
+  if(zeit){const m=(MATERIAL||[]).find(x=>x.id===id);job(['einplanen',id,datum,'--uhrzeit',zeit],`${m?m.titel:id} am ${datum} um ${zeit}`)}
+  else planEinplanen(datum,null,id)}
+function planUeber(ev){ev.preventDefault();ev.currentTarget.classList.add('drauf')}
+function planRaus(ev){ev.currentTarget.classList.remove('drauf')}
 function planModalOk(datum){
   const id=document.getElementById('pmMat').value, zeit=document.getElementById('pmZeit').value;
   planModalZu(); job(['einplanen',id,datum,'--uhrzeit',zeit],'Einplanen am '+datum+' um '+zeit);
 }
 function vPlan(){
-  if(MATERIAL===null){MATERIAL=[];api('/api/material').then(d=>{MATERIAL=d.material||[];if(view==='plan')render()})}
+  if(MATERIAL===null){MATERIAL=[];api('/api/material').then(d=>{MATERIAL=d.material||[];if(view==='plan'){render();setTimeout(()=>window.matRender&&window.matRender(),80)}})}
   // Anne 14.09.: Contentplan = Kalender + Redaktionsplan + ALLE freigegebenen Reels (CapCut-Export = freigegeben). Kein Reiter „Freigegeben" mehr.
   const p=S.plan||{slots:{},reels:[]}; const days=[...Array(7)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d});
   const fmt=(d)=>d.toISOString().slice(0,10);
   const rp=S.redaktionsplan||[];
-  setTimeout(()=>api('/api/frei').then(d=>{const g=$('#freiliste');if(!g)return;const reels=d.reels||[];
-    const passt=(r)=>{const t=(r.titel||r.slug||'').toLowerCase();const w=t.split(/[^a-zäöüß0-9]+/).filter(x=>x.length>3);
-      const k=rp.filter(e=>!e.reel).map(e=>({e,n:w.filter(x=>((e.thema||'')+' '+(e.hook||'')).toLowerCase().includes(x)).length})).sort((a,b)=>b.n-a.n)[0];
-      return k&&k.n>0?k.e:null};
-    g.innerHTML=reels.length?reels.map(r=>{const z=passt(r);return `<div class="card"><div class="row" style="justify-content:space-between"><span class="pill freigegeben">freigegeben</span><span class="meta">${esc(r.quelle||'')}</span></div>
-      <h3 style="margin-top:8px">${esc(r.titel||r.slug)}</h3><div class="meta">CTA ${esc(r.cta||'–')} · ${esc(r.slug)}</div>
-      ${z?`<div class="zuord">Gehört wahrscheinlich zu: <b>${esc(z.datum||'')} · ${esc(z.format||'Reel')} · ${esc(z.thema||'')}</b></div>`:(rp.length?'<div class="zuord">Kein passender Redaktionsplan-Punkt erkannt — bitte Slot wählen.</div>':'')}
-      <div class="row" style="margin-top:10px"><video src="${r.video||'/ready/'+encodeURIComponent(r.slug)+'/reel.mp4'}" controls preload="metadata" style="width:120px;border-radius:8px"></video>
-      <button class="btn" onclick="job(['schedule','${esc(r.slug)}'${z&&z.datum?`,'--datum','${esc(z.datum)}'`:''}],'Einplanen')">Einplanen${z&&z.datum?' am '+esc(z.datum):''}</button>
-      <a class="btn ghost" style="text-decoration:none" href="${r.video||'/ready/'+encodeURIComponent(r.slug)+'/reel.mp4'}" download>Video</a></div></div>`}).join(''):''}),50);
   const mk=S.metricool_kalender||null;
+  // Materialbibliothek: alles Einplanbare, nach Art gruppiert und per Drag & Drop in den Kalender ziehbar
+  window.matRender=function(){const box=document.getElementById('matBox');if(!box)return;
+    const m=MATERIAL||[];
+    if(!m.length){box.innerHTML='<p class="meta">lädt …</p>';return}
+    const heute=fmt(new Date());
+    const gruppen=[['Reel','Reels'],['Karussell','Karussells'],['Story','Storys']];
+    const vorschau=(x)=>{const f=(x.dateien||[])[0]||'';const u='/datei?p='+encodeURIComponent(f);
+      return /\.(mp4|mov|m4v)$/i.test(f)?`<video src="${u}" preload="metadata" muted></video>`:`<img src="${u}" alt="">`};
+    box.innerHTML=gruppen.map(([typ,titel])=>{const xs=m.filter(x=>x.typ===typ);
+      return xs.length?`<div class="matgruppe"><h3>${titel} · ${xs.length}</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${xs.map(x=>`
+        <div class="matkarte" draggable="true" ondragstart="planZieht('${esc(x.id)}');event.dataTransfer.setData('text/plain','${esc(x.id)}')" title="In den Kalender ziehen">
+          ${vorschau(x)}
+          <div style="min-width:0;flex:1"><b style="display:block;font-size:13px;line-height:1.25">${esc((x.titel||x.id).slice(0,46))}</b>
+          <span class="meta" style="font-size:11px">${x.alter_tage===0?'heute':x.alter_tage+' Tage alt'}</span>
+          <div style="margin-top:6px"><button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="planEinplanen('${heute}',null,'${esc(x.id)}')">Einplanen</button></div></div>
+        </div>`).join('')}</div></div>`:''}).join('')||'<p class="meta">Nichts Einplanbares gefunden.</p>'};
+  setTimeout(()=>window.matRender(),60);
+
   return `<h1>Contentplan</h1>
   <div class="row" style="margin:-4px 0 14px;gap:10px;align-items:center"><span class="meta">${mk?`Metricool · Stand ${esc(mk.stand||'').replace('T',' ')} · ${(mk.posts||[]).length} Beiträge`:'Metricool-Kalender noch nicht geholt'}</span>
   <button class="btn ghost" style="font-size:12px;padding:5px 11px" onclick="job(['kalender'],'Kalender holen')">aktualisieren</button></div>
@@ -666,14 +692,14 @@ function vPlan(){
     // Anne 16.09.: eine Zeile oben am Tag sagt, was fuer diesen Wochentag vorgesehen ist (aus dem Postingplan)
     const rhythmus=(S.postingplan||[]).filter(e=>(e.tag||'').slice(0,2)===kurz);
     const auf=(S.auftraege||[]).filter(a=>(a.datum||'')===k);
-    return `<div class="day"><b>${kurz} ${d.getDate()}.${d.getMonth()+1}.</b>
+    return `<div class="day" ondragover="planUeber(event)" ondragleave="planRaus(event)" ondrop="planDrop(event,'${k}')"><b>${kurz} ${d.getDate()}.${d.getMonth()+1}.</b>
       ${rhythmus.length?`<div class="tagesplan">${rhythmus.map(e=>esc([e.wer,e.format,e.thema].filter(Boolean).join(' · '))).join('<br>')}</div>`:''}
       ${(()=>{const e=[];
         ((S.metricool_kalender||{}).posts||[]).filter(x=>x.datum===k).forEach(x=>e.push({z:x.uhrzeit||'',h:`<div class="slot mc" title="${esc(x.text||'')}"><span class="zeit">${esc(x.uhrzeit)}</span> <span class="pill">${esc(x.typ)}</span><div class="netz">${esc((x.netzwerke||[]).join(' · '))}</div>${x.text?`<div style="font-size:11px;line-height:1.3;margin-top:3px;color:var(--grey)">${esc(x.text.slice(0,70))}…</div>`:''}${x.url?`<a href="${esc(x.url)}" target="_blank" class="netz">ansehen ↗</a>`:''}</div>`}));
         auf.forEach(a=>e.push({z:a.uhrzeit||'',h:`<div class="slot plan"><span class="zeit">${esc(a.uhrzeit||'')}</span> ${esc(a.thema||a.titel||a.typ||'')}<div class="netz">${esc(a.status||'')}</div></div>`}));
         rs.forEach(r=>e.push({z:r.slot||'',h:`<div class="slot plan"><span class="zeit">${esc(r.slot||'')}</span> ${esc(r.titel||(r.id||'').split('/').pop())}${r.gepostet?' ✓':''}</div>`}));
         rpk.forEach(x=>e.push({z:'',h:`<div class="slot rp">${esc(x.format||'')} · ${esc(x.thema||'')}${x.reel?' ✓':''}</div>`}));
-        slots.forEach(x=>e.push({z:x,h:`<div class="slot"><span class="zeit">${esc(x)}</span> <span class="netz">frei</span></div>`}));
+        slots.forEach(x=>e.push({z:x,h:`<div class="slot frei" ondragover="planUeber(event)" ondragleave="planRaus(event)" ondrop="planDrop(event,'${k}','${esc(x)}')" onclick="planEinplanen('${k}','${esc(x)}')"><span class="zeit">${esc(x)}</span> <span class="netz">frei — hier einplanen</span></div>`}));
         return e.sort((a,b)=>String(a.z).localeCompare(String(b.z))).map(x=>x.h).join('')})()}
       <button class="tagplus" onclick="planEinplanen('${k}')">+ einplanen</button></div>`}).join('')}</div>
   <div class="sec"><h2>Pflege</h2>
@@ -686,7 +712,7 @@ function vPlan(){
    ${rp.map((e,i)=>rpZeile(e,i)).join('')}</table>
    <div class="row" style="margin-top:10px;gap:8px"><button class="btn ghost" onclick="rpZeileNeu()">+ Zeile</button><button class="btn" onclick="rpSpeichern()">Redaktionsplan speichern</button><span class="meta" id="rpStatus"></span></div></div></div>
   <div class="sec"><h2>Eingeplant</h2>${(S.auftraege||[]).length?`<table><tr><th>Datum</th><th>Typ</th><th>Titel</th><th>Status</th></tr>${(S.auftraege||[]).slice().reverse().map(a=>`<tr><td>${esc(a.datum)} ${esc(a.uhrzeit||'')}</td><td>${esc(a.typ)}</td><td>${esc(a.thema||a.titel)}</td><td><span class="pill ${a.status==='gepostet'?'freigegeben':''}">${esc(a.status)}${a.metricool_id?' · '+esc(a.metricool_id):''}</span>${a.fehler?'<br><small style="color:var(--red)">'+esc(a.fehler)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="meta">–</p>'}</div>
-  <div class="sec" style="border:0;padding:0"><h2>Freigegeben — bereit zum Einplanen</h2><div class="grid" id="freiliste">lädt …</div></div>
+  <div class="sec"><h2>Material zum Einplanen</h2><div id="matBox">lädt …</div></div>
   <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>`;
 }
 async function vKpi(m){
