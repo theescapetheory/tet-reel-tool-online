@@ -333,7 +333,12 @@ function vEingang(){
 }
 function vSession(){
   const s=S.sessions.find(x=>x.id===cur.session)||S.sessions[0]; if(!s) return '<p>keine Session</p>'; cur.session=s.id;
-  api('/api/session/'+encodeURIComponent(s.id)).then(d=>{const box=$('#kand');if(!box)return;
+  api('/api/session/'+encodeURIComponent(s.id)).then(d=>{
+    const vb=$('#verlauf');
+    if(vb){const v=d.verlauf||[];
+      vb.innerHTML=(d.naechster?`<div class="zuord" style="margin-bottom:10px"><b>Als Nächstes:</b> ${esc(d.naechster.text)} <span class="pill">${esc(d.naechster.wer)}</span>${d.naechster.wer==='Claude'&&!d.claude_bereit?' <span style="color:var(--red)">— Claude-Zugang fehlt (Übersicht)</span>':''}</div>`:'')
+        +(v.length?`<table>${v.map(e=>`<tr><td style="white-space:nowrap;color:var(--grey)">${esc(e.zeit)}</td><td><b>${esc(e.schritt)}</b>${e.detail?'<br><small class="hint">'+esc(e.detail)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="meta">Noch nichts passiert.</p>')}
+    const box=$('#kand');if(!box)return;
     const ks=(d.kandidaten?.kandidaten||[]);
     box.innerHTML=ks.length?ks.sort((a,b)=>b.score-a.score).map(k=>`<div class="kand"><div class="row" style="justify-content:space-between"><b>${esc(k.titel||k.id)}</b><span class="pill">Score ${Math.round((k.score||0)*100)}</span></div>
       <div class="hook">„${esc(k.hook_satz||'')}"</div><div class="meta">${esc(k.bereich_t||'')} · Varianten ${Object.keys(k.varianten||{}).join('/')||'–'} · CTA ${esc(k.cta_empfehlung||'–')} ${k.ausschluss?'· <span style="color:var(--red)">Ausschluss: '+esc(k.ausschluss)+'</span>':''}</div>
@@ -353,6 +358,7 @@ function vSession(){
     <button class="btn ${s.transkript?'':'ghost'}" ${s.transkript?'':'disabled'} onclick="claude('candidates',{session:'${esc(s.id)}'},'Redaktion (Claude)')">${zoom?'4':'3'} · Claude findet Kandidaten</button>`})()}
     <span id="cleanup" class="meta"></span></div>
   
+  <div class="sec" style="border:0;padding:0"><h2>Was mit dieser Aufnahme passiert ist</h2><div id="verlauf">lädt …</div></div>
   <div class="two"><div><div class="sec" style="border:0;padding:0;margin:0"><h2>Kandidaten</h2><div id="kand">lädt …</div></div></div>
   <div><div class="sec" style="border:0;padding:0;margin:0"><h2>Reels dieser Session</h2>
     ${s.reels.length?`<table><tr><th>Reel</th><th>Status</th><th>Viral</th><th>QA</th><th>Sicht</th><th></th></tr>${s.reels.map(r=>`<tr><td>${r.status!=='angelegt'?`<video src="/files/${encodeURIComponent(s.id)}/reels/${encodeURIComponent(r.slug)}/render/reel.mp4" preload="metadata" controls style="width:90px;border-radius:8px;float:left;margin-right:10px"></video>`:''}<b>${esc(r.titel)}</b><br><small class="hint">${esc(r.slug)} · ${esc(r.typ||'')} · ${r.dauer_s?Math.round(r.dauer_s)+' s':''} · CTA ${esc(r.cta||'')} · ${r.status==='angelegt'?'in Arbeit':'Vorschnitt fertig'}</small></td><td><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span></td><td>${r.viral?r.viral.score+' / '+r.viral.schwelle:'–'}</td><td>${r.qa===true?'✓':r.qa===false?'✗':'–'}</td><td>${esc(r.sicht||'–')}</td><td><button class="btn ghost" onclick="nav('reel',{session:'${esc(s.id)}',slug:'${esc(r.slug)}'})">öffnen</button></td></tr>`).join('')}</table>`:''}
