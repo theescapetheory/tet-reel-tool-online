@@ -131,18 +131,22 @@ function uplFormular(ziel, key){
   el.innerHTML=`<div style="max-width:760px;width:100%">
     <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:12px" id="uplArt">
       <button class="btn" data-art="reel" onclick="uplArtWahl('reel')">Reel-Material</button>
-      <button class="btn ghost" data-art="story" onclick="uplArtWahl('story')">Story-Material (Plan)</button>
-      <button class="btn ghost" data-art="heute" onclick="uplArtWahl('heute')">⚡ Story HEUTE — sofort posten</button></div>
+      <button class="btn ghost" data-art="story" title="schnittfertig — es kommen nur Untertitel drauf" onclick="uplArtWahl('story')">Story-Material (Plan)</button>
+      <button class="btn ghost" data-art="heute" title="schnittfertig — Untertitel drauf und sofort raus" onclick="uplArtWahl('heute')">⚡ Story HEUTE — sofort posten</button></div>
     <label class="meta"><b>Video</b></label>
     <div class="row" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Video wählen<input type="file" accept="video/*" hidden onchange="uplSetVideo(this)"></label><span id="uplV" class="meta">–</span></div>
-    <label class="meta" style="display:block;margin-top:12px"><b>Zusatzmaterial</b></label>
-    <div class="row" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Dateien wählen<input type="file" accept="image/*,.pdf" multiple hidden onchange="uplSetZusatz(this)"></label><span id="uplZ" class="meta">–</span></div>
-    <label class="meta" style="display:block;margin-top:12px"><b>Notizen für den Cutter</b></label>
-    <textarea id="uplNotiz" style="width:100%;min-height:80px;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px" placeholder="z. B. Bild bei 0:03 einblenden"></textarea>
+    <div id="uplCutter">
+      <label class="meta" style="display:block;margin-top:12px"><b>Zusatzmaterial</b></label>
+      <div class="row" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Dateien wählen<input type="file" accept="image/*,.pdf" multiple hidden onchange="uplSetZusatz(this)"></label><span id="uplZ" class="meta">–</span></div>
+      <label class="meta" style="display:block;margin-top:12px"><b>Notizen für den Cutter</b></label>
+      <textarea id="uplNotiz" style="width:100%;min-height:80px;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px" placeholder="z. B. Bild bei 0:03 einblenden"></textarea>
+    </div>
     <div class="row" style="margin-top:12px;align-items:center"><button class="btn" id="uplGo" onclick="uplSenden('${key||''}')" disabled>Hochladen</button><span id="uplStatus" class="meta"></span></div></div>`;
 }
 let UPL={art:'reel',video:null,zusatz:[]};
-function uplArtWahl(a){UPL.art=a;document.querySelectorAll('#uplArt button').forEach(b=>{b.className='btn'+(b.dataset.art===a?'':' ghost');if(a==='heute'&&b.dataset.art==='heute'){b.style.background='var(--yellow)';b.style.color='var(--navy)'}else{b.style.background='';b.style.color=''}})}
+function uplArtWahl(a){UPL.art=a;
+  const c=document.getElementById('uplCutter'); if(c){c.hidden=(a!=='reel'); if(a!=='reel'){UPL.zusatz=[];const z=document.getElementById('uplZ');if(z)z.textContent='–';const n=document.getElementById('uplNotiz');if(n)n.value=''}}
+  document.querySelectorAll('#uplArt button').forEach(b=>{b.className='btn'+(b.dataset.art===a?'':' ghost');if(a==='heute'&&b.dataset.art==='heute'){b.style.background='var(--yellow)';b.style.color='var(--navy)'}else{b.style.background='';b.style.color=''}})}
 function uplSetVideo(inp){UPL.video=inp.files[0]||null;document.getElementById('uplV').textContent=UPL.video?UPL.video.name+' · '+Math.round(UPL.video.size/1e6)+' MB':'–';document.getElementById('uplGo').disabled=!UPL.video}
 function uplSetZusatz(inp){UPL.zusatz=[...inp.files];document.getElementById('uplZ').textContent=UPL.zusatz.length?UPL.zusatz.map(f=>f.name).join(', '):'–'}
 function uplPut(url,file,onp){return new Promise((res,rej)=>{const x=new XMLHttpRequest();x.open('POST',url);x.upload.onprogress=e=>onp&&onp(e.loaded/e.total);x.onload=()=>x.status<300?res(JSON.parse(x.responseText)):rej(new Error(x.responseText||x.status));x.onerror=()=>rej(new Error('Netzwerkfehler'));x.send(file)})}
@@ -150,11 +154,11 @@ async function uplSenden(key){
   const st=document.getElementById('uplStatus'), go=document.getElementById('uplGo'); if(!UPL.video)return; go.disabled=true; const q=key?'?key='+encodeURIComponent(key):'';
   try{
     st.textContent='Paket anlegen …';
-    const meta=await fetch('/api/upload-paket'+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:UPL.video.name,art:UPL.art,notizen:document.getElementById('uplNotiz').value,zusatz:UPL.zusatz.map(f=>f.name)})}).then(r=>r.json());
+    const meta=await fetch('/api/upload-paket'+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:UPL.video.name,art:UPL.art,notizen:UPL.art==='reel'?(document.getElementById('uplNotiz')||{}).value||'':'',zusatz:UPL.art==='reel'?UPL.zusatz.map(f=>f.name):[]})}).then(r=>r.json());
     if(!meta.ok)throw new Error(meta.error||'Paket');
     const total=UPL.video.size+UPL.zusatz.reduce((a,f)=>a+f.size,0); let done=0;
     await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=video&name=${encodeURIComponent(UPL.video.name)}`,UPL.video,p=>st.textContent='Video '+Math.round((done+p*UPL.video.size)/total*100)+' %'); done+=UPL.video.size;
-    for(const f of UPL.zusatz){await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=zusatz&name=${encodeURIComponent(f.name)}`,f,p=>st.textContent='Zusatz '+Math.round((done+p*f.size)/total*100)+' %');done+=f.size}
+    for(const f of (UPL.art==='reel'?UPL.zusatz:[])){await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=zusatz&name=${encodeURIComponent(f.name)}`,f,p=>st.textContent='Zusatz '+Math.round((done+p*f.size)/total*100)+' %');done+=f.size}
     const fin=await fetch(`/api/upload-paket/fertig${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}`,{method:'POST'}).then(r=>r.json());
     st.textContent='✓ Hochgeladen';
     UPL={art:UPL.art,video:null,zusatz:[]}; document.getElementById('uplV').textContent='–'; document.getElementById('uplZ').textContent='–'; document.getElementById('uplNotiz').value='';
