@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>TET Reel-Cockpit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;600;700;900&family=Playfair+Display:ital@1&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0d1526;--bg:#f5f6fa;--card:#ffffff;--line:rgba(13,21,38,.12);--camel:#a8865c;--camelbg:#cdb08f;--yellow:#FDDF5B;--white:#0d1526;--grey:#5d6779;--red:#d84b4b;--green:#2e9e6b;--navy2:#ffffff;--navy3:#eef0f6}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--navy);font-family:Jost,system-ui,sans-serif;min-height:100vh}
+header{display:flex;align-items:center;gap:22px;padding:18px 28px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:5;box-shadow:0 1px 0 rgba(13,21,38,.04)}
+header .brand{font-weight:900;letter-spacing:.18em;font-size:13px;text-transform:uppercase;color:var(--camel)}
+header .brand::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--yellow);margin-right:10px}
+nav{display:flex;gap:4px;margin-left:auto}
+nav button{background:none;border:1px solid transparent;color:var(--grey);font:inherit;font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:12px;padding:8px 14px;border-radius:10px;cursor:pointer}
+nav button.on{color:var(--navy);background:var(--yellow)}
+main{padding:26px 28px;max-width:1500px;margin:0 auto}
+h1{font-weight:900;font-size:30px;text-transform:uppercase;letter-spacing:-.01em;margin-bottom:6px;color:var(--navy)}
+h1 em{font-family:"Playfair Display",serif;font-style:italic;text-transform:none;font-weight:400;color:var(--camel);letter-spacing:0}
+.sub{color:var(--grey);margin-bottom:22px;font-size:15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 20px;cursor:pointer;transition:transform .15s;box-shadow:0 6px 20px rgba(13,21,38,.05)}
+.card:hover{transform:translateY(-2px);border-color:var(--camelbg)}
+.card h3{font-size:18px;font-weight:900;text-transform:uppercase;line-height:1.05;margin-bottom:6px}
+.meta{color:var(--grey);font-size:13px;display:flex;gap:10px;flex-wrap:wrap}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border:1px solid var(--line);color:var(--camel)}
+.pill.neu{background:var(--yellow);color:var(--navy);border-color:var(--yellow)}
+.pill.ok,.pill.freigegeben,.pill.bereit,.pill.auftrag,.pill.geplant,.pill.gepostet,.pill.kpi,.pill.viral-ok{background:rgba(46,158,107,.1);color:var(--green);border-color:rgba(46,158,107,.35)}
+.pill.nachbessern,.pill.fehler{background:rgba(216,75,75,.09);color:var(--red);border-color:rgba(216,75,75,.35)}
+.ladder{display:flex;gap:4px;margin:10px 0 2px}
+.ladder i{flex:1;height:5px;border-radius:3px;background:rgba(13,21,38,.08)}
+.ladder i.on{background:var(--yellow)}
+.ladder i.done{background:var(--green)}
+.btn{background:var(--yellow);color:var(--navy);border:0;border-radius:12px;padding:10px 16px;font:inherit;font-weight:900;text-transform:uppercase;letter-spacing:.06em;font-size:12px;cursor:pointer;box-shadow:0 3px 10px rgba(13,21,38,.08)}
+.btn.ghost{background:var(--card);color:var(--navy);border:1px solid var(--line);box-shadow:none}
+.btn.danger{background:var(--red);color:#fff}
+.btn:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.two{display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:22px}
+@media(max-width:900px){.two{grid-template-columns:1fr}}
+@media(max-width:760px){header{flex-wrap:wrap;gap:8px;padding:12px 14px}nav{margin-left:0;flex-wrap:wrap;gap:2px}nav button{font-size:11px;padding:7px 9px}main{padding:14px 12px}.grid{grid-template-columns:1fr}.row{flex-wrap:wrap}h1{font-size:22px}table{font-size:12px}.kal{grid-template-columns:repeat(2,1fr)}}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:12px 0}.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}.kpi b{display:block;font-size:26px;line-height:1.1}.kpi span{color:var(--grey);font-size:12px}
+.kpi input{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;margin-top:6px}
+.zuord{background:#fffdf0;border:1px solid #f1e3a0;border-radius:10px;padding:6px 10px;font-size:12px;margin-top:6px}
+video{width:100%;max-width:420px;border-radius:18px;background:#000;border:1px solid var(--line)}
+img.kb{width:100%;border-radius:14px;border:1px solid var(--line)}
+pre,textarea{font:13px/1.45 ui-monospace,Menlo,monospace;background:#f2f3f8;border:1px solid var(--line);border-radius:12px;padding:14px;white-space:pre-wrap;color:#2a3346;width:100%}
+textarea{min-height:260px;resize:vertical;color:var(--navy)}
+.score{display:flex;align-items:center;gap:14px}
+.ring{width:86px;height:86px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:28px;background:conic-gradient(var(--yellow) calc(var(--v)*1%),rgba(13,21,38,.08) 0)}
+.ring span{width:68px;height:68px;border-radius:50%;background:var(--card);display:grid;place-items:center}
+.sec{margin-top:22px;border-top:1px solid var(--line);padding-top:16px}
+.sec h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.16em;color:var(--camel);margin-bottom:10px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--camel);font-size:11px;text-transform:uppercase;letter-spacing:.12em}
+.log{max-height:320px;overflow:auto}
+.toast{position:fixed;right:20px;bottom:20px;background:var(--card);border:1px solid var(--camelbg);border-radius:14px;padding:12px 16px;max-width:420px;z-index:9;box-shadow:0 16px 44px rgba(13,21,38,.18)}
+.chat{display:flex;gap:8px;margin-top:10px}
+.chat input{flex:1;background:#f2f3f8;border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--navy);font:inherit}
+.kal{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.day{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;min-height:120px}
+.day b{display:block;color:var(--camel);font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px}
+.slot{font-size:12px;padding:5px 8px;border-radius:8px;background:rgba(253,223,91,.25);margin-bottom:5px}
+.slot.frei{background:rgba(13,21,38,.04);color:var(--grey)}
+small.hint{color:var(--grey)}
+.kand{border-left:3px solid var(--yellow);padding-left:12px;margin-bottom:14px}
+.kand .hook{font-family:"Playfair Display",serif;font-style:italic;font-size:17px;color:var(--camel)}
+body.schnitt main{width:380px;max-width:380px;margin:0;padding:14px 16px;box-sizing:border-box}
+body.schnitt h1{font-size:18px}
+.segl{font:12px/1.5 ui-monospace,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<header><div class="brand">The Escape Theory · Reel-Cockpit <span style="color:var(--grey);font-weight:400;letter-spacing:0;text-transform:none"></span></div>
+<nav><button data-v="ueber" class="on">Übersicht</button><button data-v="eingang">1 · Rohmaterial</button><button data-v="vorschnitt">2 · Vorschnitt</button><button data-v="schnitt" id="navSchnitt" hidden>✂ Schnitt (CapCut)</button><button data-v="plan">3 · Contentplan</button><button data-v="kpi">4 · KPI</button><button data-v="lernen">Lernen</button></nav><span id="onlineStand" class="meta" hidden></span></header>
+<main id="main"></main>
+<div id="toast" class="toast" hidden></div>
+<script>
+const $=(s,r=document)=>r.querySelector(s);
+const esc=(s)=>String(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const LADDER=['neu','ingest','transkript','kandidaten','reels','gerendert','qa','viral-ok','freigegeben','bereit','auftrag','geplant','gepostet','kpi'];
+const LABEL={neu:'neu',ingest:'eingelesen',transkript:'Transkript',kandidaten:'Kandidaten',reels:'Reels in Arbeit',angelegt:'angelegt',gerendert:'gerendert',qa:'QA PASS',nachbessern:'nachbessern','viral-ok':'Viral ≥ Schwelle',freigegeben:'freigegeben',bereit:'bereit zum Posten',auftrag:'Einplan-Auftrag (wartet auf Claude-Routine)',geplant:'in Metricool geplant',gepostet:'gepostet',kpi:'KPI ausgewertet'};
+let S=null, view='ueber', cur={session:null,slug:null}, timers=[];
+const api=async(p,o)=>{const r=await fetch(p,o);return r.json()};
+const post=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+function toast(t,ms=4000){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(e._t);e._t=setTimeout(()=>e.hidden=true,ms)}
+function ladder(st){const i=LADDER.indexOf(st);return '<div class="ladder">'+LADDER.map((l,k)=>`<i class="${k<i?'done':k===i?'on':''}" title="${LABEL[l]}"></i>`).join('')+'</div>'}
+async function load(){S=await api('/api/state');if(window.HOSTED){api('/api/online').then(o=>{const e=$('#onlineStand');if(!e)return;e.hidden=false;e.textContent=o.stand?('Stand '+o.stand.replace('T',' ').slice(0,16)+(o.offen?' · '+o.offen+' offen':'')):'noch kein Sync'})}if(view==='reel'&&document.activeElement&&document.activeElement.tagName==='TEXTAREA')return;if(view!=='reel')render()}
+function nav(v,extra){view=v;Object.assign(cur,extra||{});document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));render()}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>nav(b.dataset.v));
+if(window.tetDesktop){const nb=document.getElementById('navSchnitt');if(nb)nb.hidden=false}
+async function sessionEntfernen(id){if(!confirm('Diesen Upload aus dem Eingang entfernen? (Datei wird verschoben, nicht gelöscht)'))return;const r=await post('/api/session-entfernen',{id});toast(r.ok?'Entfernt':'Fehler: '+(r.error||''));nav('eingang')}
+async function uploadLink(){const d=await api('/api/upload-link');if(!d.link)return toast('Kein Upload-Schlüssel gesetzt');try{await navigator.clipboard.writeText(d.link)}catch{}toast('Upload-Link kopiert: '+d.link,12000)}
+async function uploadFrei(inp){const f=inp.files[0];if(!f)return;toast('Lade fertige Fassung hoch … ('+Math.round(f.size/1e6)+' MB)');
+ const r=await fetch('/api/upload-frei?session='+encodeURIComponent(cur.session)+'&slug='+encodeURIComponent(cur.slug),{method:'POST',body:f});const d=await r.json();
+ toast(d.ok?'✓ CapCut-Fassung liegt in 3 · Freigegeben — bereit für den Contentplan.':'Fehler beim Upload');load()}
+async function upload(inp){const f=inp.files[0];if(!f)return;toast('Lade „'+f.name+'“ hoch … ('+Math.round(f.size/1e6)+' MB)');
+ const r=await fetch('/api/upload?name='+encodeURIComponent(f.name),{method:'POST',body:f});const d=await r.json();
+ toast(d.ok?'✓ Hochgeladen — liegt im Eingang als „'+d.id+'“':'Fehler beim Upload');load()}
+async function job(args,label){toast((label||args.join(' '))+(window.HOSTED?' … geht an den Rechner':' … läuft'));const {id,error}=await post('/api/job',{args});if(error)return toast(error);const box=$('#joblog');const t=setInterval(async()=>{const j=await api('/api/job/'+id);if(box){box.textContent=j.log.slice(-6000);box.scrollTop=1e9}if(j.status!=='läuft'){clearInterval(t);toast((label||args[0])+': '+j.status,6000);load()}},1500)}
+async function claude(stage,params,label){toast(label+' — Claude arbeitet … (kann einige Minuten dauern)',8000);const out=$('#claudeout');if(out)out.textContent='… Claude arbeitet';const r=await post('/api/claude',{stage,...params});if(out)out.textContent=r.error||r.reply;toast(r.error?r.error:label+' fertig',8000);load()}
+
+function render(){
+  const m=$('#main'); if(!S){m.innerHTML='<p>lädt …</p>';return}
+  {let n=0;const t=setInterval(()=>{const b=document.getElementById('uplBox');if(b&&!b.children.length){uplFormular('uplBox','');claudeZugang()}if((b&&b.children.length)||++n>60)clearInterval(t)},100)}  // Übersicht lädt asynchron
+  document.body.classList.toggle('schnitt',view==='schnitt');
+  if(window.tetDesktop) window.tetDesktop.capcut(view==='schnitt');
+  if(view==='schnitt') return vSchnitt(m);
+  if(view==='ueber') return vUeber(m);
+  if(view==='eingang') return m.innerHTML=vEingang();
+  if(view==='vorschnitt') return m.innerHTML=vVorschnitt();
+  if(view==='frei') return nav('plan');
+  if(view==='kpi') return vKpi(m);
+  if(view==='session') return m.innerHTML=vSession();
+  if(view==='reel') return vReel(m);
+  if(view==='plan') return m.innerHTML=vPlan();
+  if(view==='lernen') return m.innerHTML=vLernen();
+}
+
+// --- Claude-Zugang (API-Key des Team-Kontos, liegt nur in ~/.config/tet-reel/anthropic.json)
+async function claudeZugang(){const el=document.getElementById('claudeZugang'); if(!el)return; if(window.HOSTED){el.innerHTML='';return} const z=await api('/api/claude-zugang');
+  el.innerHTML=`<div class="row" style="gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap"><b>Claude</b><span class="pill ${z.key?'freigegeben':''}">${z.key?'API-Key …'+esc(z.ende):'Login von Anne'}</span>
+  <input id="apiKey" type="password" placeholder="sk-ant-…" style="font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;width:260px"><button class="btn ghost" onclick="claudeZugangSpeichern()">Speichern</button>${z.key?'<button class="btn ghost" onclick="claudeZugangSpeichern(true)">Entfernen</button>':''}</div>`}
+async function claudeZugangSpeichern(loeschen){const k=loeschen?'':document.getElementById('apiKey').value.trim(); const r=await post('/api/claude-zugang',{api_key:k}); toast(r.error||(r.key?'✓ Claude läuft über den API-Key':'✓ Key entfernt')); claudeZugang()}
+// --- Upload-Paket (Anne 15.09.): Art + Video + Zusatzmaterial + Notizen — dasselbe Formular wie auf der externen Seite
+function uplFormular(ziel, key){
+  const el=document.getElementById(ziel); if(!el) return;
+  if(window.HOSTED){const L=window.DROPBOX_LINKS||{};
+    el.innerHTML=`<div class="row" style="gap:8px;flex-wrap:wrap">
+      ${L.reel?`<a class="btn" target="_blank" rel="noopener" href="${esc(L.reel)}">Reel-Material</a>`:''}
+      ${L.story?`<a class="btn ghost" target="_blank" rel="noopener" href="${esc(L.story)}">Story-Material (Plan)</a>`:''}
+      ${L.heute?`<a class="btn ghost" target="_blank" rel="noopener" href="${esc(L.heute)}">⚡ Story HEUTE</a>`:''}</div>`;
+    return}
+  el.innerHTML=`<div style="max-width:760px;width:100%">
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:12px" id="uplArt">
+      <button class="btn" data-art="reel" onclick="uplArtWahl('reel')">Reel-Material</button>
+      <button class="btn ghost" data-art="story" onclick="uplArtWahl('story')">Story-Material (Plan)</button>
+      <button class="btn ghost" data-art="heute" onclick="uplArtWahl('heute')">⚡ Story HEUTE — sofort posten</button></div>
+    <label class="meta"><b>Video</b></label>
+    <div class="row" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Video wählen<input type="file" accept="video/*" hidden onchange="uplSetVideo(this)"></label><span id="uplV" class="meta">–</span></div>
+    <label class="meta" style="display:block;margin-top:12px"><b>Zusatzmaterial</b></label>
+    <div class="row" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Dateien wählen<input type="file" accept="image/*,.pdf" multiple hidden onchange="uplSetZusatz(this)"></label><span id="uplZ" class="meta">–</span></div>
+    <label class="meta" style="display:block;margin-top:12px"><b>Notizen für den Cutter</b></label>
+    <textarea id="uplNotiz" style="width:100%;min-height:80px;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px" placeholder="z. B. Bild bei 0:03 einblenden"></textarea>
+    <div class="row" style="margin-top:12px;align-items:center"><button class="btn" id="uplGo" onclick="uplSenden('${key||''}')" disabled>Hochladen</button><span id="uplStatus" class="meta"></span></div></div>`;
+}
+let UPL={art:'reel',video:null,zusatz:[]};
+function uplArtWahl(a){UPL.art=a;document.querySelectorAll('#uplArt button').forEach(b=>{b.className='btn'+(b.dataset.art===a?'':' ghost');if(a==='heute'&&b.dataset.art==='heute'){b.style.background='var(--yellow)';b.style.color='var(--navy)'}else{b.style.background='';b.style.color=''}})}
+function uplSetVideo(inp){UPL.video=inp.files[0]||null;document.getElementById('uplV').textContent=UPL.video?UPL.video.name+' · '+Math.round(UPL.video.size/1e6)+' MB':'–';document.getElementById('uplGo').disabled=!UPL.video}
+function uplSetZusatz(inp){UPL.zusatz=[...inp.files];document.getElementById('uplZ').textContent=UPL.zusatz.length?UPL.zusatz.map(f=>f.name).join(', '):'–'}
+function uplPut(url,file,onp){return new Promise((res,rej)=>{const x=new XMLHttpRequest();x.open('POST',url);x.upload.onprogress=e=>onp&&onp(e.loaded/e.total);x.onload=()=>x.status<300?res(JSON.parse(x.responseText)):rej(new Error(x.responseText||x.status));x.onerror=()=>rej(new Error('Netzwerkfehler'));x.send(file)})}
+async function uplSenden(key){
+  const st=document.getElementById('uplStatus'), go=document.getElementById('uplGo'); if(!UPL.video)return; go.disabled=true; const q=key?'?key='+encodeURIComponent(key):'';
+  try{
+    st.textContent='Paket anlegen …';
+    const meta=await fetch('/api/upload-paket'+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:UPL.video.name,art:UPL.art,notizen:document.getElementById('uplNotiz').value,zusatz:UPL.zusatz.map(f=>f.name)})}).then(r=>r.json());
+    if(!meta.ok)throw new Error(meta.error||'Paket');
+    const total=UPL.video.size+UPL.zusatz.reduce((a,f)=>a+f.size,0); let done=0;
+    await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=video&name=${encodeURIComponent(UPL.video.name)}`,UPL.video,p=>st.textContent='Video '+Math.round((done+p*UPL.video.size)/total*100)+' %'); done+=UPL.video.size;
+    for(const f of UPL.zusatz){await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=zusatz&name=${encodeURIComponent(f.name)}`,f,p=>st.textContent='Zusatz '+Math.round((done+p*f.size)/total*100)+' %');done+=f.size}
+    const fin=await fetch(`/api/upload-paket/fertig${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}`,{method:'POST'}).then(r=>r.json());
+    st.textContent='✓ Hochgeladen';
+    UPL={art:UPL.art,video:null,zusatz:[]}; document.getElementById('uplV').textContent='–'; document.getElementById('uplZ').textContent='–'; document.getElementById('uplNotiz').value='';
+    if(typeof load==='function') load();
+  }catch(e){st.textContent='Fehler: '+e.message; go.disabled=false}
+}
+
+async function uploadArt(inp,artFest){
+  const f=inp.files[0]; if(!f) return;
+  const art=artFest||(document.querySelector('input[name="uplart"]:checked')||{}).value||'reel';
+  toast('Lade „'+f.name+'“ hoch … ('+Math.round(f.size/1e6)+' MB)');
+  const r=await fetch('/api/upload?art='+art+'&name='+encodeURIComponent(f.name),{method:'POST',body:f});
+  const d=await r.json(); inp.value='';
+  toast(d.ok?(art==='heute'?'✓ Story für heute — Untertitel werden gerade eingebrannt, das dauert etwa so lange wie der Clip.'
+    :art==='story'?'✓ Story-Material liegt im Rohmaterial (Redaktionsplan).'
+    :'✓ Reel-Material liegt im Eingang als „'+d.id+'“'):'Fehler beim Upload', 9000);
+  render();
+}
+async function storyFreigeben(name){
+  const d=await post('/api/story/freigeben',{name});
+  toast(d.ok?'✓ Stories freigegeben — die Routine plant sie ein.':(d.error||'Fehler'));
+  render();
+}
+function zeitseit(ms){ if(!ms) return ''; const t=Math.round((Date.now()-ms)/86400000);
+  return t<=0?'heute':t===1?'gestern':'vor '+t+' Tagen'; }
+
+function vUeber(m){
+  m.innerHTML='<h1>Übersicht</h1>';
+  api('/api/uebersicht').then(d=>{
+    const r=d.reels, sr=d.storyRoh;
+    const arc=d.stories.heute||d.stories.ersatz, istHeute=!!d.stories.heute;
+    const reelZeilen=r.liste.map(s=>`<tr onclick="nav('session',{session:'${esc(s.id)}'})" style="cursor:pointer">
+      <td><b>${esc(s.id)}</b><br><small class="hint">${esc(s.typ||'')}${s.dateien?' · '+s.dateien+' Dateien':''}${s.reels?' · '+s.reels+' Reels':''}</small></td>
+      <td>${esc(s.datum||'')}</td>
+      <td><span class="pill ${esc(s.status)}">${esc(LABEL[s.status]||s.status)}</span></td>
+      <td style="width:170px">${ladder(s.status)}</td></tr>`).join('');
+    const storyZeilen=sr.liste.map(s=>`<tr><td><b>${esc(s.name)}</b><br><small class="hint">${esc(s.quelle)}${s.einzeldatei?' · Einzeldatei':' · '+s.dateien+' Dateien'}</small></td>
+      <td>${esc(zeitseit(s.mtime))}</td></tr>`).join('');
+    const kacheln=arc?arc.bilder.map(b=>`<figure style="margin:0">
+      <a href="${b.url}" target="_blank"><img src="${b.url}" style="width:100%;border-radius:12px;border:1px solid var(--line);display:block"></a>
+      <figcaption class="meta" style="margin-top:6px">${esc(b.slot)}</figcaption></figure>`).join(''):'';
+
+    const hu=(d.heuteUploads&&d.heuteUploads.stories)||[];
+    const heuteKarten=hu.map(st=>`<div class="card" style="padding:12px">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <b style="font-size:14px">${esc(st.name)}</b>
+        <span class="pill ${st.status==='bereit'?'ok':st.status==='fehler'?'fehler':''}">${esc(st.status)}</span></div>
+      <div class="meta" style="margin:4px 0 8px">${st.untertitel?('Untertitel: '+st.woerter+' Wörter'):(st.hinweis?esc(st.hinweis):'ohne Untertitel')} · hochgeladen ${esc((st.erstellt||'').slice(11))}</div>
+      ${st.url?`<video controls preload="metadata" style="width:100%;border-radius:10px" src="${st.url}"></video>`:''}
+      ${st.grund?`<p class="sub" style="color:var(--red)">${esc(st.grund)}</p>`:''}
+    </div>`).join('');
+
+    m.innerHTML=`<h1>Übersicht</h1>
+
+    <div class="sec"><h2>Material hochladen</h2>
+      <div class="card">
+        <div class="row" style="gap:18px;align-items:center;flex-wrap:wrap">
+          <div id="uplBox"></div>
+          <div id="claudeZugang" style="width:100%"></div>
+        </div>
+        
+      </div>
+    </div>
+
+    <div class="sec"><h2>Rohmaterial für Reels ${r.neu?`<span class="pill neu">${r.neu} neu</span>`:''}</h2>
+      <div class="card">
+        ${reelZeilen?`<table><tr><th>Aufnahme</th><th>Datum</th><th>Status</th><th>Weg</th></tr>${reelZeilen}</table>`:''}
+        <div class="row" style="margin-top:12px"><button class="btn ghost" onclick="nav('eingang')">Alle ${r.gesamt} Aufnahmen →</button>
+        ${r.zuletzt?`<span class="meta">Dropbox zuletzt geprüft: ${esc(String(r.zuletzt).replace('T',' '))}</span>`:''}</div>
+      </div>
+    </div>
+
+    <div class="sec"><h2>Rohmaterial für Stories ${sr.gesamt?`<span class="pill">${sr.gesamt}</span>`:''}</h2>
+      <div class="card">
+        ${storyZeilen?`<table><tr><th>Material</th><th>Zuletzt</th></tr>${storyZeilen}</table>`
+          :''}
+      </div>
+    </div>
+
+    <div class="sec"><h2>Stories heute — sofort raus ${hu.length?`<span class="pill neu">${hu.length}</span>`:''}</h2>
+      <div class="card">
+        ${heuteKarten?`<div class="grid">${heuteKarten}</div>
+          <p class="sub" style="margin-top:10px">Fertige Stories stehen in der Warteschlange für heute
+          (<code>~/tet-reel-work/stories-heute/${esc(d.datum)}/auftrag.json</code>). Das Einstellen bei Metricool
+          macht die Posting-Routine — das Cockpit selbst postet nichts.</p>`
+        :''}
+      </div>
+    </div>
+
+    <div class="sec"><h2>Geplanter Story-Arc</h2>
+      <div class="card">
+        ${arc?`<div class="row" style="justify-content:space-between;align-items:center">
+            <div><b>${esc(arc.name)}</b><div class="meta">${istHeute?'für heute':'kein Arc für heute — das ist der letzte'} · ${esc(arc.phase)}</div></div>
+            <span class="pill ${arc.phase==='zur Prüfung'?'neu':'ok'}">${esc(arc.phase)}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:14px">${kacheln}</div>
+          <div class="row" style="margin-top:14px">
+            ${arc.ordner==='zur-pruefung'?`<button class="btn" onclick="storyFreigeben('${esc(arc.name)}')">Alle ${arc.bilder.length} freigeben →</button>`
+              :'<span class="meta">Schon freigegeben — die Routine plant die Slots ein.</span>'}
+          </div>`
+        :''}
+      </div>
+    </div>
+
+    ${d.cover.length?`<div class="sec"><h2>Zuletzt gebaute Post-Cover</h2><div class="card">
+      <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:8px">
+      ${d.cover.map(c=>`<a href="${c.post}" target="_blank" title="${esc(c.slug)} — Post öffnen">
+        <img src="${c.url}" style="width:100%;border-radius:8px;border:1px solid var(--line);display:block"></a>`).join('')}
+      </div></div></div>`:''}
+    `;
+  });
+}
+
+function vFrei(m){
+  m.innerHTML='<h1>Freigegebener Content</h1><div class="grid" id="freigrid">lädt …</div>';
+  api('/api/frei').then(d=>{const g=$('#freigrid');if(!g)return;g.innerHTML=(d.reels||[]).map(r=>`<div class="card"><span class="pill freigegeben">freigegeben</span><h3 style="margin-top:8px">${esc(r.titel)}</h3><div class="meta">CTA ${esc(r.cta||'–')}</div><p style="font-size:13px;color:var(--grey);margin:8px 0">${esc(r.caption)}…</p><video controls preload="metadata" style="max-width:100%" src="/ready/${encodeURIComponent(r.slug)}/reel.mp4"></video><div class="row" style="margin-top:10px"><button class="btn" onclick="nav('plan')">In den Contentplan →</button></div></div>`).join('')||''});
+}
+async function capcutOeffnen(dir){job(['capcut-draft',dir],'Projekt in CapCut');toast('Baue CapCut-Projekt mit Ebenen (Clips + Text-Captions) — CapCut öffnet sich, Projekt liegt oben in der Liste.',9000)}
+async function capcutWebImport(dir){if(!window.tetDesktop)return toast('Nur in der TET-Studio-App');toast('Lade Material in CapCut Web …',8000);const r=await window.tetDesktop.oeffnen(dir);toast(r.ok?'✓ '+r.anzahl+' Videos im CapCut-Medienfenster.':'Import fehlgeschlagen: '+(r.grund||''),9000)}
+async function vSchnitt(m){
+ // Desktop-Hülle: links diese Leiste, rechts CapCut Web eingebettet (BrowserView, gleicher Login wie capcut.com).
+ const alle=S.sessions.flatMap(s=>s.reels.filter(r=>r.gerendert).map(r=>({...r,session:s.id})));
+ if(!cur.slug||!alle.find(r=>r.slug===cur.slug&&r.session===cur.session)){
+  m.innerHTML=`<h1>Schnitt</h1>
+  ${alle.map(r=>`<div class="card" style="margin:8px 0;cursor:pointer" onclick="nav('schnitt',{session:'${esc(r.session)}',slug:'${esc(r.slug)}'})"><b>${esc(r.titel)}</b><div class="meta">${esc(r.session)} · ${r.dauer_s?Math.round(r.dauer_s)+' s':''}</div></div>`).join('')||''}`;
+  return;
+ }
+ const dir=WORKP(cur.session)+'/reels/'+cur.slug;
+ const ant=await api('/api/reel/'+encodeURIComponent(cur.session)+'/'+encodeURIComponent(cur.slug)); const reel=(ant&&ant.reel)||ant||{};
+ const red=(reel&&reel.redaktion)||{}; const off=+((reel&&reel.quelle&&reel.quelle.offset_s)||0);
+ const segs=(red.segmente||[]).map((s0,k)=>`${String(k+1).padStart(2,' ')}  ${(s0.start-off).toFixed(1).padStart(6)} – ${(s0.end-off).toFixed(1).padStart(6)} s  ${esc((s0.text||'').slice(0,60))}`).join('\n');
+ m.innerHTML=`<div class="row" style="justify-content:space-between"><button class="btn ghost" onclick="nav('vorschnitt')">← Vorschnitt</button><span class="meta">${esc(cur.slug)}</span></div>
+ <h1 style="margin-top:10px">${esc(red.titel||cur.slug)}</h1>
+ <div class="sub">Hook: ${esc(red.hook||'–')} · CTA <b>${esc((red.cta&&red.cta.keyword)||'–')}</b></div>
+ <div class="row" style="margin:12px 0"><button class="btn" onclick="capcutOeffnen('${esc(dir)}')">▶ Projekt in CapCut öffnen (Desktop, mit Ebenen)</button><button class="btn ghost" onclick="capcutWebImport('${esc(dir)}')">nur Material in CapCut Web</button><button class="btn ghost" onclick="job(['dropbox-uebergabe','${esc(dir)}'],'An CapCut übergeben');toast('Quelle + Vorschnitt + Untertitel liegen gleich in Dropbox „Reels-Uebergabe/${esc(cur.slug)}“ — rechts in CapCut: Import → Dropbox.',9000)">☁︎ Material nach Dropbox</button></div>
+ <div class="meta" style="margin-top:6px"><b>In CapCut Desktop</b><br>„Projekt öffnen“ baut ein echtes Projekt mit allen Ebenen: ein Clip je Kamera-Einstellung (verlängerbar), Punch-Zooms als Keyframes, Titel/Typecards/Inserts als Text- und Bild-Ebenen, jede Caption eine Text-Ebene (Akzentwort gelb), SFX als Tonspur — alles editierbar.<br>Export 1080×1920 → Dropbox <b>Reels-Freigabe</b> (oder ~/Movies/TET Freigabe) → landet automatisch in 3 · Freigegeben</div>
+ <div class="segl" style="font-size:11px">${esc(dir)}/capcut-paket/</div>
+ <div class="segl">${segs||'(keine Segmente)'}</div>
+ <div class="meta"><b>Stil</b> · Captions unten, Jost 700, Akzentwort #FDDF5B · Tayler / The Escape Theory · CTA nur 222 / ANALYSE</div>
+ <details style="margin-top:10px"><summary class="meta">Caption für Instagram</summary><div class="segl">${esc(red.caption_ig||'')}\n\nKommentiere ${esc((red.cta&&red.cta.keyword)||'')}\n\n${esc(red.hashtags||'')}</div></details>
+ <div id="joblog" class="segl" style="max-height:120px;overflow:auto"></div>`;
+}
+function vVorschnitt(){
+ // Anne 28.08.: Vorschnitt = Übersicht der fertigen Reels; EIN Klick öffnet das Schnittstudio (Reel-Detail).
+ const alle=S.sessions.flatMap(s=>s.reels.filter(r=>r.gerendert).map(r=>({...r,session:s.id})));
+ const grp={}; alle.forEach(r=>{(grp[r.session]=grp[r.session]||[]).push(r)});
+ return `<h1>Vorschnitt</h1>
+ 
+ ${Object.keys(grp).length?Object.entries(grp).map(([sid,reels])=>`
+  <div class="sec" style="border:0;padding:0;margin-top:18px"><h2>${esc(sid)}</h2></div>
+  <div class="grid">${reels.map(r=>`
+   <div class="card" onclick="nav(window.tetDesktop?'schnitt':'reel',{session:'${esc(sid)}',slug:'${esc(r.slug)}'})">
+    <div class="row" style="justify-content:space-between"><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span><span class="meta">${r.dauer_s?Math.round(r.dauer_s)+' s':''}</span></div>
+    <h3 style="margin-top:8px">${esc(r.titel)}</h3>
+    <div class="meta">Viral ${r.viral?r.viral.score+'/'+r.viral.schwelle:'–'} · Sync ✓ · CTA ${esc(r.cta||'–')}</div>
+    <div class="row" style="margin-top:10px"><button class="btn" onclick="event.stopPropagation();job(['dropbox-uebergabe','${esc(WORKP(sid))}/reels/${esc(r.slug)}'],'An CapCut übergeben');toast('Übergabe läuft: Quelle + Vorschnitt + Untertitel + Anleitung landen in Dropbox „Reels-Uebergabe/${esc(r.slug)}“. In CapCut Web aus Dropbox öffnen. Export nach „Reels-Freigabe“ → landet automatisch in 3 · Freigegeben.',10000)">▶ In CapCut bearbeiten</button><button class="btn ghost" onclick="event.stopPropagation();job(['capcut-draft','${esc(WORKP(sid))}/reels/${esc(r.slug)}'],'CapCut lokal öffnen')">auf diesem Mac öffnen</button></div>
+   </div>`).join('')}</div>`).join(''):''}`;
+}
+function vEingang(){
+  const neu=S.sessions.filter(s=>s.status==='neu').length, inArbeit=S.sessions.filter(s=>!['neu','gepostet','kpi'].includes(s.status)).length;
+  const reels=S.sessions.flatMap(s=>s.reels.map(r=>({...r,session:s.id})));
+  const bereit=reels.filter(r=>['bereit','freigegeben','viral-ok'].includes(r.status)).length;
+  return `<h1>Eingang</h1>
+  <div class="sub">${neu} neu · ${inArbeit} in Arbeit · ${bereit} Reels bereit/freigabefähig · CTA zuletzt: <b>${esc(S.cta||'–')}</b> · Metricool: Connector-Routine${S.metricool==='token'?' + REST-Token':''} · Watch zuletzt ${esc(S.intakeZuletzt||'–')}
+  &nbsp; <button class="btn ghost" onclick="job(['watch'],'Dropbox prüfen')">Dropbox jetzt prüfen</button> <label class="btn" style="cursor:pointer">⬆︎ Rohmaterial hochladen<input type=file accept=video/*,audio/* style=display:none onchange=upload(this)></label> <button class="btn ghost" onclick="uploadLink()">🔗 Link für Externe (nur Hochladen)</button></div>
+  <div class="grid">${S.sessions.map(s=>`<div class="card" onclick="nav('session',{session:'${esc(s.id)}'})" title="Projekt öffnen (Verarbeitung, Kandidaten)">
+    <div class="row" style="justify-content:space-between"><span class="pill ${esc(s.status)}">${esc(LABEL[s.status]||s.status)}</span><span class="meta">${esc(s.typ||'')} · ${esc(s.material||'')}</span></div>
+    <h3 style="margin-top:10px">${esc(s.id)}</h3>
+    <div class="meta">${esc(s.datum||'')} ${s.dauer_s?'· '+Math.round(s.dauer_s/60)+' min':''} ${s.dateien?'· '+s.dateien+' Dateien':''} ${s.kandidaten?'· '+s.kandidaten+' Kandidaten':''} ${s.reels.length?'· '+s.reels.length+' Reels':''}</div>
+    ${ladder(s.status)}<div style='height:7px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden'><i style='display:block;height:100%;width:${s.fortschritt??0}%;background:linear-gradient(90deg,var(--camel),var(--yellow))'></i></div><div class='meta' style='margin-top:4px'>${s.fortschritt??0} % verarbeitet</div></div>`).join('')}</div>
+  ${S.jobs.length?`<div class="sec"><h2>Letzte Läufe</h2><table>${S.jobs.map(j=>`<tr><td>${esc(j.start.slice(11,16))}</td><td>tet-reel ${esc(j.cmd)}</td><td><span class="pill ${j.status==='fehler'?'fehler':j.status==='fertig'?'ok':''}">${esc(j.status)}</span></td></tr>`).join('')}</table></div>`:''}`;
+}
+function vSession(){
+  const s=S.sessions.find(x=>x.id===cur.session)||S.sessions[0]; if(!s) return '<p>keine Session</p>'; cur.session=s.id;
+  api('/api/session/'+encodeURIComponent(s.id)).then(d=>{const box=$('#kand');if(!box)return;
+    const ks=(d.kandidaten?.kandidaten||[]);
+    box.innerHTML=ks.length?ks.sort((a,b)=>b.score-a.score).map(k=>`<div class="kand"><div class="row" style="justify-content:space-between"><b>${esc(k.titel||k.id)}</b><span class="pill">Score ${Math.round((k.score||0)*100)}</span></div>
+      <div class="hook">„${esc(k.hook_satz||'')}"</div><div class="meta">${esc(k.bereich_t||'')} · Varianten ${Object.keys(k.varianten||{}).join('/')||'–'} · CTA ${esc(k.cta_empfehlung||'–')} ${k.ausschluss?'· <span style="color:var(--red)">Ausschluss: '+esc(k.ausschluss)+'</span>':''}</div>
+      <div class="meta" style="margin:4px 0 8px">${esc(k.dramaturgie||'')}</div>
+      ${k.ausschluss?'':`<div class="row"><button class="btn" onclick="claude('reel',{session:'${esc(s.id)}',kandidat:'${esc(k.id)}',variante:'45s'},'Reel anlegen + rendern')">Reel anlegen (45s)</button><button class="btn ghost" onclick="claude('reel',{session:'${esc(s.id)}',kandidat:'${esc(k.id)}',variante:'30s'},'Reel anlegen')">30s</button><button class="btn ghost" onclick="claude('reel',{session:'${esc(s.id)}',kandidat:'${esc(k.id)}',variante:'60s'},'Reel anlegen')">60s</button></div>`}</div>`).join('')
+      :`<p class="sub">Noch keine Kandidaten. ${d.transkript?'':'Erst Transkript erzeugen, dann '}Claude die Redaktion machen lassen.</p>`;
+    const cl=$('#cleanup');if(cl&&Array.isArray(d.cleanup)){const n=(t)=>d.cleanup.filter(c=>c.typ===t).length;cl.textContent=`Aufräumen: ${n('fuellwort')} Füllwörter · ${n('stotterer')} Stotterer · ${n('falschstart')} Falschstarts`}});
+  return `<h1>${esc(s.id)}${String(s.id).startsWith('upload-')?` <button class="btn ghost" style="font-size:12px" onclick="sessionEntfernen('${esc(s.id)}')">✕ aus dem Eingang entfernen</button>`:''}</h1>
+  <div class="sub">${esc(s.typ||'')} · ${esc(s.material||'')} · ${esc(s.pfad||'')}</div>
+  ${s.notizen||(s.zusatz&&s.zusatz.length)?`<div class="zuord" style="margin-bottom:12px"><b>Hinweise vom Absender${s.absender?' ('+esc(s.absender)+')':''}:</b> ${esc(s.notizen||'–')}${s.zusatz&&s.zusatz.length?'<br><b>Zusatzmaterial:</b> '+s.zusatz.map(esc).join(', '):''}</div>`:''}
+  <div class="row" style="margin-bottom:18px">
+    ${(()=>{const zoom=s.typ==='zoom'||s.material==='zoom'; const eingelesen=!zoom||s.status!=='neu'; return `
+    ${zoom?`<button class="btn ${eingelesen?'ghost':''}" ${eingelesen?'disabled':''} onclick="job(['zoom-ingest','${esc(s.pfad||'')}'],'Zoom einlesen')">1 · Zoom einlesen</button>`:''}
+    <button class="btn ${eingelesen&&!s.transkript?'':'ghost'}" ${(!eingelesen||s.transkript)?'disabled':''} title="${eingelesen?'':'erst Zoom einlesen'}" onclick="job(['transcribe','${esc(WORKP(s.id))}'],'Transkript')">${zoom?'2':'1'} · Transkript</button>
+    <button class="btn ghost" ${s.transkript?'':'disabled'} onclick="job(['candidates','${esc(WORKP(s.id))}'],'Kandidaten-Paket')">${zoom?'3':'2'} · Paket bauen</button>
+    <button class="btn ${s.transkript?'':'ghost'}" ${s.transkript?'':'disabled'} onclick="claude('candidates',{session:'${esc(s.id)}'},'Redaktion (Claude)')">${zoom?'4':'3'} · Claude findet Kandidaten</button>`})()}
+    <span id="cleanup" class="meta"></span></div>
+  
+  <div class="two"><div><div class="sec" style="border:0;padding:0;margin:0"><h2>Kandidaten</h2><div id="kand">lädt …</div></div></div>
+  <div><div class="sec" style="border:0;padding:0;margin:0"><h2>Reels dieser Session</h2>
+    ${s.reels.length?`<table><tr><th>Reel</th><th>Status</th><th>Viral</th><th>QA</th><th>Sicht</th><th></th></tr>${s.reels.map(r=>`<tr><td><b>${esc(r.titel)}</b><br><small class="hint">${esc(r.slug)} · ${esc(r.typ||'')} · ${r.dauer_s?Math.round(r.dauer_s)+' s':''} · CTA ${esc(r.cta||'')}</small></td><td><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span></td><td>${r.viral?r.viral.score+' / '+r.viral.schwelle:'–'}</td><td>${r.qa===true?'✓':r.qa===false?'✗':'–'}</td><td>${esc(r.sicht||'–')}</td><td><button class="btn ghost" onclick="nav('reel',{session:'${esc(s.id)}',slug:'${esc(r.slug)}'})">öffnen</button></td></tr>`).join('')}</table>`:''}
+    <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre><div id="claudeout" class="sub" style="margin-top:10px;white-space:pre-wrap"></div></div></div></div>`;
+}
+const WORKP=(id)=>'~/tet-reel-work/'.replace('~',HOME)+id;
+let HOME='';
+async function vReel(m){
+  const s=S.sessions.find(x=>x.id===cur.session); const r0=s&&s.reels.find(x=>x.slug===cur.slug);
+  if(!r0){nav('vorschnitt');return}
+  m.innerHTML='<p>lädt …</p>';
+  const d=await api(`/api/reel/${encodeURIComponent(cur.session)}/${encodeURIComponent(cur.slug)}`);
+  const base=`/files/${encodeURIComponent(cur.session)}/reels/${encodeURIComponent(cur.slug)}`; const dir=WORKP(cur.session)+'/reels/'+cur.slug;
+  const v=d.viralFull; const canPublish=d.qa&&v&&v.ueber_schwelle&&/FREIGABE/.test(d.sicht||'');
+  m.innerHTML=`<h1>${esc(d.titel)}</h1>
+  <div class="sub">${esc(cur.session)} · ${esc(d.typ||'')} · ${esc(d.variante||'')} · CTA <b>${esc(d.cta||'')}</b> · ${d.spec.frames?Math.round(d.spec.frames/30)+' s · '+d.spec.kamera+' Kamera-Keys · '+d.spec.uebergaenge+' Übergänge · '+d.spec.grafiken.length+' Grafiken':'noch nicht gebaut'}</div>
+  <div class="row" style="margin-bottom:18px">
+    <button class="btn" onclick="job(['run','${esc(dir)}'],'Reel bauen')">Bauen (run)</button>
+    <button class="btn ghost" onclick="job(['run','${esc(dir)}','--force'],'Reel neu bauen')">neu bauen</button>
+    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="claude('sicht',{session:'${esc(cur.session)}',slug:'${esc(cur.slug)}'},'QA-Sicht (Claude)')">Sicht (Claude)</button>
+    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="claude('jury',{session:'${esc(cur.session)}',slug:'${esc(cur.slug)}'},'Viral-Jury (Claude)')">Viral-Check (Claude)</button>
+    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['viral','${esc(dir)}'],'Viral-Score')">Score neu rechnen</button>
+    <button class="btn" ${canPublish?'':'disabled'} title="${canPublish?'':'braucht QA PASS + Sicht FREIGABE + Viral ≥ Schwelle'}" onclick="job(['publish','${esc(dir)}'],'Freigeben + ablegen')">Freigeben → Ablage</button>
+    <button class="btn ghost" ${d.status==='bereit'||d.status==='freigegeben'?'':'disabled'} onclick="job(['schedule','${esc(dir)}'],'Einplanen (Metricool)')">Einplanen</button>
+    <button class="btn" onclick="job(['capcut-draft','${esc(dir)}'],'CapCut-Projekt bauen');toast('Baue CapCut-Projekt mit allen Ebenen (ca. 1 Min). Auf diesem Mac öffnet sich CapCut; von außen erscheint es per Projektsynchronisierung in CapCut unter „Speicher“.',10000)">▶ Projekt in CapCut öffnen (Desktop, mit Ebenen)</button>
+    <button class="btn" onclick="job(['dropbox-uebergabe','${esc(dir)}'],'An Dropbox übergeben')">☁︎ An Kollegen übergeben (Dropbox)</button>
+    <button class="btn ghost" onclick="job(['capcut-paket','${esc(dir)}'],'CapCut-Paket bauen')">📦 CapCut-Paket (lokal)</button>
+    <a class="btn ghost" style="text-decoration:none" href="${base}/capcut-draft-paket.zip" download>Paket laden</a>
+    <label class="btn ghost" style="cursor:pointer">⇧ CapCut-Fassung hochladen<input type=file accept=video/mp4 style=display:none onchange="uploadFrei(this)"></label></div>
+  <div class="two"><div>
+    ${d.dateien.video?`<video controls preload="metadata" src="${base}/render/reel.mp4?${d.mtime}"></video>`:''}
+    <div class="sec"><h2>Schnitt · Etappe 1</h2><div id="schnitt" class="meta">lädt …</div></div>
+    ${v?`<div class="sec"><h2>Viral-Check</h2><div class="score"><div class="ring" style="--v:${v.score}"><span>${v.score}</span></div><div><b>${v.ueber_schwelle?'über':'unter'} Schwelle ${v.schwelle}</b><br><small class="hint">Heuristik ${v.teile?.heuristik??'–'} · Jury ${v.teile?.jury??'–'} · Korridor Median ${v.teile?.korridor?.konto_median_plays??'–'} Plays</small></div></div>
+      ${(v.gruende||[]).length?'<ul style="margin:10px 0 0 18px;font-size:14px">'+v.gruende.map(g=>'<li>'+esc(g)+'</li>').join('')+'</ul>':''}
+      ${(v.verbesserungen||[]).length?'<div class="sec"><h2>Verbesserungen</h2><ul style="margin-left:18px;font-size:14px">'+v.verbesserungen.map(g=>'<li>'+esc(g)+'</li>').join('')+'</ul></div>':''}</div>`:''}
+    ${d.kpiFull?`<div class="sec"><h2>KPI nach dem Posten</h2><table><tr><th>Plays</th><th>Likes</th><th>Kommentare</th><th>Saves</th><th>Prognose</th></tr><tr><td>${d.kpiFull.plays??'–'}</td><td>${d.kpiFull.likes??'–'}</td><td>${d.kpiFull.kommentare??'–'}</td><td>${d.kpiFull.saves??'–'}</td><td>${v?v.score:'–'}</td></tr></table></div>`:''}
+  </div><div>
+    ${d.dateien.kontaktbogen?`<img class="kb" src="${base}/qa/kontaktbogen.jpg?${d.mtime}" alt="Kontaktbogen">`:''}
+    ${d.dateien.sfx?`<img class="kb" style="margin-top:10px" src="${base}/qa/sfx.png?${d.mtime}" alt="SFX-Kurve">`:''}
+    <div class="sec"><h2>Captions bearbeiten</h2><div id="capedit" class="meta">lädt …</div></div>
+    <div class="sec"><h2>Redaktion (reel.json)</h2><textarea id="reeljson">${esc(JSON.stringify(d.reel,null,1))}</textarea>
+      <div class="row" style="margin-top:8px"><button class="btn ghost" onclick="saveReel()">Speichern</button><button class="btn ghost" onclick="job(['validate','${esc(dir)}'],'Validieren')">Validieren</button></div></div>
+    ${d.sicht?`<div class="sec"><h2>Sicht</h2><pre>${esc(d.sicht)}</pre></div>`:''}
+    ${d.report?`<div class="sec"><h2>QA-Report</h2><pre>${esc(d.report)}</pre></div>`:''}
+    <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre><div id="claudeout" class="sub" style="margin-top:10px;white-space:pre-wrap"></div></div>
+  </div></div>`;
+  initSchnitt(d);
+  initCaptions(d);
+}
+async function saveReel(){try{const reel=JSON.parse($('#reeljson').value);await post(`/api/reel/${encodeURIComponent(cur.session)}/${encodeURIComponent(cur.slug)}`,{reel});toast('reel.json gespeichert')}catch(e){toast('JSON-Fehler: '+e.message)}}
+
+/* ================= Schnitt-Editor · Etappe 1 (28.08.) =================
+   Clips = Segmente aus reel.json (Quell-Sekunden). Trimmen/VERLAENGERN an den
+   Kanten (Quellfenster!), Teilen am Playhead, Loeschen, Speichern -> reel.json;
+   „Bauen" erneuert danach Schnitt+Ton+Transkript+Captions automatisch (cut-hash). */
+let ED=null;
+function initSchnitt(d){
+  const el=document.getElementById('schnitt'); if(!el) return;
+  if(!d.reel||!d.reel.redaktion){el.textContent='kein reel.json';return}
+  if(d.reel.quelle&&d.reel.quelle.typ==='zoom-split'){el.innerHTML='';return}
+  ED={segs:JSON.parse(JSON.stringify(d.reel.redaktion.segmente)), orig:JSON.parse(JSON.stringify(d.reel.redaktion.segmente)),
+      off:(d.quelle&&d.quelle.offset_s)||0, proxy:d.quelle&&d.quelle.proxy, reel:d.reel, sel:0, pps:10, srcDur:null, dirty:false};
+  el.innerHTML=''
+   +(ED.proxy?'<video id="edv" src="'+ED.proxy+'" preload="metadata" style="max-width:240px;border-radius:12px;background:#000" controls muted></video>'
+             :'')
+   +'<div class="row" style="margin:10px 0">'
+   +'<button class="btn ghost" onclick="edSplit()">✂︎ Am Playhead teilen</button>'
+   +'<button class="btn ghost" onclick="edDel()">🗑 Clip löschen</button>'
+   +'<button class="btn ghost" onclick="edReset()">↩︎ Zurücksetzen</button>'
+   +'<button class="btn" id="edsave" onclick="edSave()" disabled>Änderungen speichern</button>'
+   +'<span class="meta" id="edsum"></span></div>'
+   +'<div id="edlane" style="position:relative;height:56px;background:rgba(13,21,38,.05);border-radius:10px;overflow-x:auto;overflow-y:hidden"></div>'
+   +'<div class="meta" id="edinfo" style="margin-top:8px">Clip anklicken · Kanten ziehen = trimmen/verlängern (die Vorschau springt auf das Bild der neuen Grenze)</div>';
+  const v=document.getElementById('edv');
+  if(v) v.addEventListener('loadedmetadata',()=>{ED.srcDur=v.duration; edRender()});
+  edRender();
+}
+function edTotal(){return ED.segs.reduce((a,s)=>a+(s.end-s.start),0)}
+function edRender(){
+  const lane=document.getElementById('edlane'); if(!lane) return;
+  const W=Math.max(lane.clientWidth-8, edTotal()*ED.pps);
+  let x=0, html='';
+  ED.segs.forEach((s,i)=>{
+    const w=Math.max(26,(s.end-s.start)*ED.pps);
+    html+='<div class="edclip" data-i="'+i+'" style="position:absolute;top:6px;bottom:6px;left:'+x+'px;width:'+w+'px;'
+      +'background:linear-gradient(180deg,#aecbe8,#8fb2d6);border:1px solid rgba(13,21,38,.25);border-radius:8px;'
+      +(i===ED.sel?'outline:2px solid #e3b93c;z-index:2;':'')
+      +'font-size:10px;font-weight:700;color:#0d1526;overflow:hidden;white-space:nowrap;padding:3px 12px;cursor:grab" '
+      +'onpointerdown="edDown(event,'+i+')">'
+      +'<span style="pointer-events:none">'+(i+1)+' · '+(s.end-s.start).toFixed(1)+'s</span>'
+      +'<i style="position:absolute;left:0;top:0;bottom:0;width:10px;cursor:ew-resize;background:rgba(13,21,38,.22);border-radius:8px 0 0 8px"></i>'
+      +'<i style="position:absolute;right:0;top:0;bottom:0;width:10px;cursor:ew-resize;background:rgba(13,21,38,.22);border-radius:0 8px 8px 0"></i>'
+      +'</div>';
+    x+=w+4;
+  });
+  lane.innerHTML='<div style="position:relative;height:100%;width:'+Math.max(W,x)+'px">'+html+'</div>';
+  const sum=document.getElementById('edsum');
+  if(sum) sum.textContent='Gesamt '+edTotal().toFixed(1)+' s · '+ED.segs.length+' Clips'+(ED.dirty?' · ungespeichert':'');
+  const sv=document.getElementById('edsave'); if(sv) sv.disabled=!ED.dirty;
+}
+function edSeek(t){const v=document.getElementById('edv'); if(v&&ED.srcDur!=null){v.currentTime=Math.max(0,Math.min(ED.srcDur-0.05,t-ED.off))}}
+function edDown(ev,i){
+  ev.preventDefault(); ED.sel=i;
+  const clip=ev.currentTarget, rect=clip.getBoundingClientRect();
+  const zone = ev.clientX-rect.left<12 ? 'l' : rect.right-ev.clientX<12 ? 'r' : 'm';
+  const s0={...ED.segs[i]}, x0=ev.clientX;
+  edSeek(zone==='l'?s0.start:s0.end); edRender();
+  if(zone==='m'){return}
+  const move=(e)=>{
+    const ds=(e.clientX-x0)/ED.pps, s=ED.segs[i];
+    if(zone==='l'){ s.start=Math.min(s0.start+ds, s.end-0.4); if(ED.srcDur!=null) s.start=Math.max(ED.off, s.start); s.start=Math.round(s.start*100)/100; edSeek(s.start) }
+    else { s.end=Math.max(s0.end+ds, s.start+0.4); if(ED.srcDur!=null) s.end=Math.min(ED.off+ED.srcDur, s.end); s.end=Math.round(s.end*100)/100; edSeek(s.end) }
+    ED.dirty=true; edRender();
+  };
+  const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);
+    const s=ED.segs[i];
+    document.getElementById('edinfo').textContent='Clip '+(i+1)+': Quelle '+(s.start-ED.off).toFixed(2)+' s – '+(s.end-ED.off).toFixed(2)+' s ('+(s.end-s.start).toFixed(2)+' s). Speichern → Bauen erneuert Schnitt, Ton und Captions.';
+  };
+  window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
+}
+function edSplit(){
+  const v=document.getElementById('edv'); if(!v){toast('Ohne Quell-Proxy kein Teilen');return}
+  const t=v.currentTime+ED.off, i=ED.segs.findIndex(s=>t>s.start+0.3&&t<s.end-0.3);
+  if(i<0){toast('Playhead steht in keinem Clip (Vorschau auf die Stelle spulen, an der geteilt werden soll)');return}
+  const s=ED.segs[i], cut=Math.round(t*100)/100;
+  ED.segs.splice(i,1,{...s,end:cut},{...s,start:cut,text:(s.text||'')+' (Teil 2)'});
+  ED.sel=i+1; ED.dirty=true; edRender(); toast('Geteilt bei Quelle '+(cut-ED.off).toFixed(2)+' s');
+}
+function edDel(){
+  if(ED.segs.length<=1){toast('Der letzte Clip bleibt.');return}
+  ED.segs.splice(ED.sel,1); ED.sel=Math.max(0,ED.sel-1); ED.dirty=true; edRender(); toast('Clip gelöscht');
+}
+function edReset(){ED.segs=JSON.parse(JSON.stringify(ED.orig));ED.sel=0;ED.dirty=false;edRender();toast('Zurückgesetzt auf den gespeicherten Stand')}
+async function edSave(){
+  const reel=ED.reel; reel.redaktion.segmente=ED.segs;
+  await post('/api/reel/'+encodeURIComponent(cur.session)+'/'+encodeURIComponent(cur.slug),{reel});
+  ED.orig=JSON.parse(JSON.stringify(ED.segs)); ED.dirty=false; edRender();
+  toast('✓ Gespeichert. Jetzt „Bauen (run)" — die Kette erneuert Schnitt, Ton, Transkript und Captions automatisch.');
+}
+
+
+/* ============ Caption-Editor · Etappe 2 (08.09.) ============ */
+let CAP=null;
+function initCaptions(d){
+  const el=document.getElementById('capedit'); if(!el) return;
+  const list=d.captionsList||[];
+  if(!list.length){el.innerHTML='';return}
+  CAP={list, reel:d.reel, cutSig:d.cutSig, edits:{}};
+  const vorhandene=((d.reel.captions||{}).korrekturen||{});
+  if(vorhandene.cut_sig===d.cutSig) (vorhandene.gruppen||[]).forEach(g=>{CAP.edits[g.i]=g});
+  const fmtT=f=>(f/30).toFixed(1);
+  el.innerHTML='<div style="max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:12px">'
+   +'<table><tr><th style="width:70px">Zeit</th><th>Text</th><th style="width:120px">Akzentwort</th></tr>'
+   +list.map((g,i)=>{
+     const txt=g.words.map(w=>w.s??w.t).join(' ');
+     const akz=(g.words.find(w=>w.accent)||{}); const akzTxt=(akz.s??akz.t)||'';
+     const e=CAP.edits[i]||{};
+     return '<tr><td class="meta">'+fmtT(g.from)+'–'+fmtT(g.to)+' s</td>'
+      +'<td><input data-i="'+i+'" data-f="text" style="width:100%;background:#f2f3f8;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:inherit;font-size:13.5px" value="'+esc(e.text??txt)+'" oninput="capEdit(this)"></td>'
+      +'<td><input data-i="'+i+'" data-f="akzent" style="width:100%;background:#f2f3f8;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:inherit;font-size:13.5px;color:#a8865c" value="'+esc(e.akzent??akzTxt)+'" oninput="capEdit(this)" placeholder="–"></td></tr>';
+   }).join('')+'</table></div>'
+   +'<div class="row" style="margin-top:10px"><button class="btn" id="capsave" onclick="capSave()" disabled>Caption-Änderungen speichern</button>'
+   +'</div>';
+}
+function capEdit(inp){
+  const i=+inp.dataset.i, f=inp.dataset.f;
+  const g=CAP.list[i];
+  const orig = f==='text' ? g.words.map(w=>w.s??w.t).join(' ') : ((g.words.find(w=>w.accent)||{}).s??(g.words.find(w=>w.accent)||{}).t??'');
+  CAP.edits[i]=CAP.edits[i]||{i};
+  if(inp.value===orig){delete CAP.edits[i][f]; if(Object.keys(CAP.edits[i]).length<=1) delete CAP.edits[i];}
+  else CAP.edits[i][f]=inp.value;
+  document.getElementById('capsave').disabled=!Object.keys(CAP.edits).length;
+}
+async function capSave(){
+  const reel=CAP.reel;
+  reel.captions=reel.captions||{};
+  reel.captions.korrekturen={cut_sig:CAP.cutSig, gruppen:Object.values(CAP.edits)};
+  await post('/api/reel/'+encodeURIComponent(cur.session)+'/'+encodeURIComponent(cur.slug),{reel});
+  toast('✓ '+Object.keys(CAP.edits).length+' Caption-Korrektur(en) gespeichert. Jetzt „Bauen (run)" — dann stehen sie im Video.');
+  document.getElementById('capsave').disabled=true;
+}
+
+
+// --- Redaktionsplan im Tool (Anne 15.09.: kein Asana; Contentplan wird hier gebaut)
+const RP_FORMATE=['Reel','Story','Karussell','B-Roll','Live'], RP_STATUS=['geplant','in Arbeit','freigegeben','gepostet'];
+function rpZeile(e,i){const sel=(name,list,val)=>`<select data-k="${name}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px">${list.map(o=>`<option ${o===val?'selected':''}>${o}</option>`).join('')}</select>`;
+  const inp=(name,val,w)=>`<input data-k="${name}" value="${esc(val||'')}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px;width:${w||'100%'}">`;
+  return `<tr class="rpRow">${e.reel?`<td>`:'<td>'}${inp('datum',e.datum,'120px').replace('<input','<input type="date"')}</td><td>${sel('format',RP_FORMATE,e.format||'Reel')}</td><td>${inp('thema',e.thema)}</td><td>${inp('hook',e.hook)}</td><td>${sel('cta',['222','ANALYSE','–'],e.cta||'222')}</td><td>${sel('status',RP_STATUS,e.status||'geplant')}</td><td style="white-space:nowrap"><select data-k="material" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px;max-width:220px"><option value="">Material …</option>${(MATERIAL||[]).filter(m=>!e.format||m.typ===(e.format||'Reel')||(e.format||'').startsWith(m.typ)).map(m=>`<option value="${esc(m.id)}" ${m.id===e.material?'selected':''}>${esc(m.titel)} (${m.dateien.length})</option>`).join('')}</select> <input data-k="uhrzeit" type="time" value="${esc(e.uhrzeit||'11:30')}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px"> <button class="btn" style="padding:6px 10px" onclick="rpEinplanen(this)">Einplanen</button> <button class="btn ghost" style="padding:4px 8px" onclick="this.closest('tr').remove()">✕</button></td></tr>`}
+function rpZeileNeu(){const t=$('#rpTab');const d=new Date();d.setDate(d.getDate()+1);t.insertAdjacentHTML('beforeend',rpZeile({datum:d.toISOString().slice(0,10)},0))}
+async function rpSpeichern(){const rows=[...document.querySelectorAll('#rpTab tr.rpRow')].map(tr=>{const o={};tr.querySelectorAll('[data-k]').forEach(el=>o[el.dataset.k]=el.value);const alt=(S.redaktionsplan||[]).find(e=>e.datum===o.datum&&e.thema===o.thema);if(alt&&alt.reel)o.reel=alt.reel;return o}).filter(o=>o.datum||o.thema);
+  const r=await fetch('/api/redaktionsplan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan:rows})}).then(r=>r.json());
+  $('#rpStatus').textContent=r.ok?'✓ gespeichert ('+r.n+' Einträge)':'Fehler'; S.redaktionsplan=rows; setTimeout(load,300)}
+let MATERIAL=null;
+function ppZeile(e){const inp=(k,v,w)=>`<input data-k="${k}" value="${esc(v||'')}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px;width:${w||'100%'}">`;
+  return `<tr class="ppRow"><td><select data-k="tag" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px">${['Mo','Di','Mi','Do','Fr','Sa','So'].map(t=>`<option ${t===e.tag?'selected':''}>${t}</option>`).join('')}</select></td><td>${inp('wer',e.wer,'110px')}</td><td>${inp('format',e.format,'150px')}</td><td>${inp('thema',e.thema)}</td><td><button class="btn ghost" style="padding:4px 8px" onclick="this.closest('tr').remove()">✕</button></td></tr>`}
+function ppZeileNeu(){$('#ppTab').insertAdjacentHTML('beforeend',ppZeile({tag:'Mo'}))}
+async function ppSpeichern(){const rows=[...document.querySelectorAll('#ppTab tr.ppRow')].map(tr=>{const o={};tr.querySelectorAll('[data-k]').forEach(el=>o[el.dataset.k]=el.value);return o}).filter(o=>o.wer||o.thema);
+  const r=await fetch('/api/postingplan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan:rows})}).then(r=>r.json());$('#ppStatus').textContent=r.ok?'✓ gespeichert':'Fehler';S.postingplan=rows}
+async function rpEinplanen(btn){const tr=btn.closest('tr');const g=k=>(tr.querySelector('[data-k='+k+']')||{}).value||'';const mat=g('material'),datum=g('datum'),uhr=g('uhrzeit')||'11:30',thema=g('thema');
+  if(!mat||!datum)return toast('Material und Datum wählen');btn.disabled=true;
+  await rpSpeichern();
+  job(['einplanen',mat,datum,'--uhrzeit',uhr,'--thema',thema],'Einplanen '+datum+' '+uhr)}
+function vPlan(){
+  if(MATERIAL===null){MATERIAL=[];api('/api/material').then(d=>{MATERIAL=d.material||[];if(view==='plan')render()})}
+  // Anne 14.09.: Contentplan = Kalender + Redaktionsplan + ALLE freigegebenen Reels (CapCut-Export = freigegeben). Kein Reiter „Freigegeben" mehr.
+  const p=S.plan||{slots:{},reels:[]}; const days=[...Array(7)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d});
+  const fmt=(d)=>d.toISOString().slice(0,10);
+  const rp=S.redaktionsplan||[];
+  setTimeout(()=>api('/api/frei').then(d=>{const g=$('#freiliste');if(!g)return;const reels=d.reels||[];
+    const passt=(r)=>{const t=(r.titel||r.slug||'').toLowerCase();const w=t.split(/[^a-zäöüß0-9]+/).filter(x=>x.length>3);
+      const k=rp.filter(e=>!e.reel).map(e=>({e,n:w.filter(x=>((e.thema||'')+' '+(e.hook||'')).toLowerCase().includes(x)).length})).sort((a,b)=>b.n-a.n)[0];
+      return k&&k.n>0?k.e:null};
+    g.innerHTML=reels.length?reels.map(r=>{const z=passt(r);return `<div class="card"><div class="row" style="justify-content:space-between"><span class="pill freigegeben">freigegeben</span><span class="meta">${esc(r.quelle||'')}</span></div>
+      <h3 style="margin-top:8px">${esc(r.titel||r.slug)}</h3><div class="meta">CTA ${esc(r.cta||'–')} · ${esc(r.slug)}</div>
+      ${z?`<div class="zuord">Gehört wahrscheinlich zu: <b>${esc(z.datum||'')} · ${esc(z.format||'Reel')} · ${esc(z.thema||'')}</b></div>`:(rp.length?'<div class="zuord">Kein passender Redaktionsplan-Punkt erkannt — bitte Slot wählen.</div>':'')}
+      <div class="row" style="margin-top:10px"><video src="${r.video||'/ready/'+encodeURIComponent(r.slug)+'/reel.mp4'}" controls preload="metadata" style="width:120px;border-radius:8px"></video>
+      <button class="btn" onclick="job(['schedule','${esc(r.slug)}'${z&&z.datum?`,'--datum','${esc(z.datum)}'`:''}],'Einplanen')">Einplanen${z&&z.datum?' am '+esc(z.datum):''}</button>
+      <a class="btn ghost" style="text-decoration:none" href="${r.video||'/ready/'+encodeURIComponent(r.slug)+'/reel.mp4'}" download>Video</a></div></div>`}).join(''):''}),50);
+  return `<h1>Contentplan</h1>
+  
+  <div class="kal">${days.map(d=>{const k=fmt(d);const slots=(p.slots||{})[k]||[];const rs=(p.reels||[]).filter(r=>(r.when||'').startsWith(k)||r.tag===k);const rpk=rp.filter(e=>e.datum===k);
+    return `<div class="day"><b>${['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()]} ${d.getDate()}.${d.getMonth()+1}.</b>${rpk.map(e=>`<div class="slot" style="border-left:3px solid var(--camel)" title="Redaktionsplan">${esc(e.format||'')} · ${esc(e.thema||'')}${e.reel?' ✓':''}</div>`).join('')}${rs.map(r=>`<div class="slot" title="${esc(r.status)}">${esc(r.slot||'')} ${esc(r.titel||(r.id||'').split('/').pop())}${r.gepostet?' ✓':''}</div>`).join('')}<div class="meta">${slots.join(' · ')||'–'}</div></div>`}).join('')}</div>
+  <div class="sec"><h2>Postingplan</h2>
+  <table id="ppTab"><tr><th>Tag</th><th>Wer</th><th>Format</th><th>Thema</th><th></th></tr>${(S.postingplan||[]).map(e=>ppZeile(e)).join('')}</table>
+  <div class="row" style="margin-top:10px;gap:8px"><button class="btn ghost" onclick="ppZeileNeu()">+ Zeile</button><button class="btn" onclick="ppSpeichern()">Postingplan speichern</button><span class="meta" id="ppStatus"></span></div></div>
+  <div class="sec"><h2>Redaktionsplan</h2>
+  <table id="rpTab"><tr><th>Datum</th><th>Format</th><th>Thema</th><th>Hook</th><th>CTA</th><th>Status</th><th>Einplanen</th></tr>
+  ${rp.map((e,i)=>rpZeile(e,i)).join('')}</table>
+  <div class="row" style="margin-top:10px;gap:8px"><button class="btn ghost" onclick="rpZeileNeu()">+ Zeile</button><button class="btn" onclick="rpSpeichern()">Redaktionsplan speichern</button><span class="meta" id="rpStatus"></span></div></div>
+  <div class="sec"><h2>Eingeplant</h2>${(S.auftraege||[]).length?`<table><tr><th>Datum</th><th>Typ</th><th>Titel</th><th>Status</th></tr>${(S.auftraege||[]).slice().reverse().map(a=>`<tr><td>${esc(a.datum)} ${esc(a.uhrzeit||'')}</td><td>${esc(a.typ)}</td><td>${esc(a.thema||a.titel)}</td><td><span class="pill ${a.status==='gepostet'?'freigegeben':''}">${esc(a.status)}${a.metricool_id?' · '+esc(a.metricool_id):''}</span>${a.fehler?'<br><small style="color:var(--red)">'+esc(a.fehler)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="meta">–</p>'}</div>
+  <div class="sec" style="border:0;padding:0"><h2>Freigegeben — bereit zum Einplanen</h2><div class="grid" id="freiliste">lädt …</div></div>
+  <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>`;
+}
+async function vKpi(m){
+  // Anne 14.09.: dienstags KPI-Meeting = App öffnen -> KPI -> alles da.
+  m.innerHTML='<h1>KPI</h1>';
+  const d=await api('/api/kpi'); const posts=(d.posts||[]).slice().sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||''));
+  const snaps=d.snapshots||[]; const last=snaps[snaps.length-1]||{}; const prev=snaps[snaps.length-2]||{};
+  const f=(x)=>x==null?'–':Number(x).toLocaleString('de-DE');
+  const kwOf=(dt)=>{const x=new Date(dt);const t=new Date(Date.UTC(x.getFullYear(),x.getMonth(),x.getDate()));const day=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-day);const y=new Date(Date.UTC(t.getUTCFullYear(),0,1));return Math.ceil((((t-y)/864e5)+1)/7)};
+  const kw='KW'+kwOf(new Date()); const mw=(d.meeting||{})[kw]||{};
+  const fol=last.instagram?.followers, folPrev=prev.instagram?.followers;
+  const week=posts.filter(p=>Date.now()-new Date(p.timestamp).getTime()<7*864e5);
+  const sum=(arr,k)=>arr.reduce((a,p)=>a+(+p[k]||0),0);
+  m.innerHTML=`<h1>KPI</h1>
+  
+  <div class="kpi-grid">
+   <div class="kpi"><span>Follower (Instagram)</span><b>${f(fol)}</b><span>${folPrev!=null&&fol!=null?(fol-folPrev>=0?'+':'')+f(fol-folPrev)+' zur Vorwoche':''}</span></div>
+   <div class="kpi"><span>Leads aus Organic</span><input id="k_leads" type="number" value="${esc(mw.leads??'')}" placeholder="eintragen"></div>
+   <div class="kpi"><span>Kontakte in den Circle</span><input id="k_circle" type="number" value="${esc(mw.circle??'')}" placeholder="eintragen"></div>
+   <div class="kpi"><span>Umsatz aus Organic (€)</span><input id="k_umsatz" type="number" value="${esc(mw.umsatz??'')}" placeholder="eintragen"></div>
+  </div>
+  <div class="row"><button class="btn" onclick="kpiSpeichern('${kw}')">Meeting-Werte ${kw} speichern</button><span class="meta">${mw.stand?'zuletzt gespeichert '+esc(mw.stand.slice(0,16).replace('T',' ')):''}</span></div>
+  <div class="kpi-grid" style="margin-top:18px">
+   <div class="kpi"><span>Posts letzte 7 Tage</span><b>${week.length}</b></div>
+   <div class="kpi"><span>Plays letzte 7 Tage</span><b>${f(sum(week,'videoPlayCount'))}</b></div>
+   <div class="kpi"><span>Likes letzte 7 Tage</span><b>${f(sum(week,'likesCount'))}</b></div>
+   <div class="kpi"><span>Kommentare letzte 7 Tage</span><b>${f(sum(week,'commentsCount'))}</b></div>
+  </div>
+  <div class="sec"><h2>Jeder Content einzeln</h2><div style="overflow-x:auto"><table><tr><th>Datum</th><th>Content</th><th>Typ</th><th>Plays</th><th>Views</th><th>Likes</th><th>Komm.</th><th>Dauer</th><th></th></tr>
+  ${posts.map(p=>`<tr><td>${esc((p.timestamp||'').slice(0,10))}</td><td><b>${esc((p.caption||'').split('\n')[0].slice(0,70))}</b></td><td>${esc(p.productType||p.type||'')}</td><td>${f(p.videoPlayCount)}</td><td>${f(p.videoViewCount)}</td><td>${f(p.likesCount)}</td><td>${f(p.commentsCount)}</td><td>${p.videoDuration?Math.round(p.videoDuration)+' s':''}</td><td><a href="${esc(p.url||'#')}" target="_blank">öffnen</a></td></tr>`).join('')}</table></div>
+  <div class="meta" style="margin-top:8px">Quelle: Apify-Profil-Scan (<code>_state/posts.json</code>, ${posts.length} Posts). Reichweite/Saves/Shares/Follows je Reel kommen über die Metricool-Routine, sobald sie Zahlen liefert (<code>_state/metricool-reels.json</code>).</div></div>
+  <div class="sec"><h2>Konto-Verlauf</h2><table><tr><th>Datum</th><th>KW</th><th>Follower</th><th>Reichweite</th><th>Interaktionen</th></tr>${snaps.slice(-10).reverse().map(s=>`<tr><td>${esc(s.date||'')}</td><td>${esc(s.kw||'')}</td><td>${f(s.instagram?.followers)}</td><td>${f(s.instagram?.reach)}</td><td>${f(s.instagram?.interactions)}</td></tr>`).join('')}</table></div>`;
+}
+async function kpiSpeichern(kw){const werte={leads:+$('#k_leads').value||0,circle:+$('#k_circle').value||0,umsatz:+$('#k_umsatz').value||0};const r=await post('/api/kpi-meeting',{kw,werte});toast(r.ok?'✓ Meeting-Werte '+kw+' gespeichert':'Fehler beim Speichern');}
+function vLernen(){
+  const reels=S.sessions.flatMap(s=>s.reels.filter(r=>r.viral).map(r=>({...r,session:s.id})));
+  return `<h1>Lernen</h1>
+  
+  <table><tr><th>Reel</th><th>Format</th><th>Prognose</th><th>Plays</th><th>Likes</th><th>Komm.</th><th>Status</th></tr>${reels.map(r=>`<tr><td><b>${esc(r.titel)}</b><br><small class="hint">${esc(r.session)}</small></td><td>${esc(r.typ||'')}</td><td>${r.viral.score}</td><td>${r.kpi?.plays??'–'}</td><td>${r.kpi?.likes??'–'}</td><td>${r.kpi?.kommentare??'–'}</td><td><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span></td></tr>`).join('')||'<tr><td colspan=7 class="sub">noch keine bewerteten Reels</td></tr>'}</table>
+  <div class="sec"><h2>Playbook — reel-learnings.md</h2><textarea id="learn">${esc(S.learnings||'# Reel-Learnings\n\n(noch leer — der Analyst schreibt hier mit Belegzahlen, was trägt und was nicht)\n')}</textarea><div class="row" style="margin-top:8px"><button class="btn ghost" onclick="post('/api/learnings',{text:$('#learn').value}).then(()=>toast('gespeichert'))">Speichern</button></div></div>
+  <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre><div id="claudeout" class="sub" style="margin-top:10px;white-space:pre-wrap"></div></div>`;
+}
+fetch('/api/state').then(r=>r.json()).then(s=>{S=s;HOME=(s.sessions[0]?.pfad||'').includes('/Users/')?'/Users/'+(s.sessions[0].pfad.split('/')[2]):'';render()});
+setInterval(load,20000);
+</script>
+</body>
+</html>

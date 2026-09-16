@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: tet-reel-tool
+    runtime: node
+    plan: free
+    buildCommand: ""
+    startCommand: node server.js
+    healthCheckPath: /api/online
+    envVars:
+      - key: COCKPIT_PASS
+        sync: false
+      - key: SYNC_SECRET
+        sync: false
