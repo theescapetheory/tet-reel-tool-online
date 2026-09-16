@@ -70,9 +70,22 @@ th{color:var(--grey);font-size:11px;text-transform:uppercase;letter-spacing:.12e
 .chat{display:flex;gap:8px;margin-top:10px}
 .chat input{flex:1;background:#f2f3f8;border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--navy);font:inherit}
 .kal{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
-.day{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;min-height:120px}
+.day{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;min-height:150px;display:flex;flex-direction:column}
+.slot.mc{border-left:3px solid #ff5aa8;background:#fff5fa}
+.tagesplan{font-size:11px;line-height:1.45;color:var(--grey);border-bottom:1px solid var(--line);padding:6px 0 8px;margin:6px 0 4px}
 .day b{display:block;color:var(--camel);font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px}
-.slot{font-size:12px;padding:5px 8px;border-radius:8px;background:rgba(253,223,91,.25);margin-bottom:5px}
+.slot{font-size:12px;padding:6px 9px;border-radius:9px;background:var(--navy3);margin-bottom:6px;border-left:3px solid var(--line)}
+.slot.mc{border-left-color:#e1306c;background:#fdf3f7}
+.slot.plan{border-left-color:var(--navy);background:#eef2f9}
+.slot.rp{border-left-color:var(--camelbg);background:#faf6f0}
+.slot .zeit{font-weight:700;font-size:12px}
+.slot .netz{font-size:10px;color:var(--grey);letter-spacing:.04em;text-transform:uppercase}
+.tagplus{width:100%;margin-top:auto;font-size:12px;padding:6px;border:1px dashed #cfd8e4;background:transparent;color:var(--grey);border-radius:9px;cursor:pointer}
+.tagplus:hover{border-color:var(--navy);color:var(--navy);background:var(--navy3)}
+.modal{position:fixed;inset:0;background:rgba(22,35,58,.35);display:grid;place-items:center;z-index:20}
+.modal .box{background:var(--card);border-radius:18px;padding:22px;width:min(520px,92vw);box-shadow:0 30px 80px rgba(22,35,58,.25)}
+.modal label{display:block;font-size:12px;color:var(--grey);margin:12px 0 4px}
+.modal select,.modal input{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
 .slot.frei{background:rgba(13,21,38,.04);color:var(--grey)}
 small.hint{color:var(--grey)}
 .kand{border-left:3px solid var(--yellow);padding-left:12px;margin-bottom:14px}
@@ -161,7 +174,7 @@ function uplIcloudHolen(){const i=document.getElementById('uplIcloud'),st=docume
   const n=UPL.art==='reel'?((document.getElementById('uplNotiz')||{}).value||''):'';const args=['icloud',l,'--art',UPL.art];if(n)args.push('--notizen',n);
   i.value='';if(st)st.textContent='Hole aus iCloud …';job(args,'iCloud-Link holen')}
 function uplArtWahl(a){UPL.art=a;
-  const c=document.getElementById('uplCutter'); if(c){c.hidden=(a!=='reel'); if(a!=='reel'){UPL.zusatz=[];const z=document.getElementById('uplZ');if(z)z.textContent='–';const n=document.getElementById('uplNotiz');if(n)n.value=''}}
+  const c=document.getElementById('uplCutter'); if(c){c.hidden=(a==='heute'); if(a==='heute'){UPL.zusatz=[];const z=document.getElementById('uplZ');if(z)z.textContent='–';const n=document.getElementById('uplNotiz');if(n)n.value=''}}
   document.querySelectorAll('#uplArt button').forEach(b=>{b.className='btn'+(b.dataset.art===a?'':' ghost');if(a==='heute'&&b.dataset.art==='heute'){b.style.background='var(--yellow)';b.style.color='var(--navy)'}else{b.style.background='';b.style.color=''}})}
 function uplSetVideo(inp){UPL.video=inp.files[0]||null;document.getElementById('uplV').textContent=UPL.video?UPL.video.name+' · '+Math.round(UPL.video.size/1e6)+' MB':'–';document.getElementById('uplGo').disabled=!UPL.video}
 function uplSetZusatz(inp){UPL.zusatz=[...inp.files];document.getElementById('uplZ').textContent=UPL.zusatz.length?UPL.zusatz.map(f=>f.name).join(', '):'–'}
@@ -170,11 +183,11 @@ async function uplSenden(key){
   const st=document.getElementById('uplStatus'), go=document.getElementById('uplGo'); if(!UPL.video)return; go.disabled=true; const q=key?'?key='+encodeURIComponent(key):'';
   try{
     st.textContent='Paket anlegen …';
-    const meta=await fetch('/api/upload-paket'+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:UPL.video.name,art:UPL.art,notizen:UPL.art==='reel'?(document.getElementById('uplNotiz')||{}).value||'':'',zusatz:UPL.art==='reel'?UPL.zusatz.map(f=>f.name):[]})}).then(r=>r.json());
+    const meta=await fetch('/api/upload-paket'+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:UPL.video.name,art:UPL.art,notizen:UPL.art!=='heute'?(document.getElementById('uplNotiz')||{}).value||'':'',zusatz:UPL.art!=='heute'?UPL.zusatz.map(f=>f.name):[]})}).then(r=>r.json());
     if(!meta.ok)throw new Error(meta.error||'Paket');
     const total=UPL.video.size+UPL.zusatz.reduce((a,f)=>a+f.size,0); let done=0;
     await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=video&name=${encodeURIComponent(UPL.video.name)}`,UPL.video,p=>st.textContent='Video '+Math.round((done+p*UPL.video.size)/total*100)+' %'); done+=UPL.video.size;
-    for(const f of (UPL.art==='reel'?UPL.zusatz:[])){await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=zusatz&name=${encodeURIComponent(f.name)}`,f,p=>st.textContent='Zusatz '+Math.round((done+p*f.size)/total*100)+' %');done+=f.size}
+    for(const f of (UPL.art!=='heute'?UPL.zusatz:[])){await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=zusatz&name=${encodeURIComponent(f.name)}`,f,p=>st.textContent='Zusatz '+Math.round((done+p*f.size)/total*100)+' %');done+=f.size}
     const fin=await fetch(`/api/upload-paket/fertig${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}`,{method:'POST'}).then(r=>r.json());
     st.textContent='✓ Hochgeladen';
     UPL={art:UPL.art,video:null,zusatz:[]}; document.getElementById('uplV').textContent='–'; document.getElementById('uplZ').textContent='–'; document.getElementById('uplNotiz').value='';
@@ -296,7 +309,9 @@ async function capcutOeffnen(dir){job(['capcut-draft',dir],'Projekt in CapCut');
 async function capcutWebImport(dir){if(!window.tetDesktop)return toast('Nur in der TET-Studio-App');toast('Lade Material in CapCut Web …',8000);const r=await window.tetDesktop.oeffnen(dir);toast(r.ok?'✓ '+r.anzahl+' Videos im CapCut-Medienfenster.':'Import fehlgeschlagen: '+(r.grund||''),9000)}
 async function vSchnitt(m){
  // Desktop-Hülle: links diese Leiste, rechts CapCut Web eingebettet (BrowserView, gleicher Login wie capcut.com).
- const alle=S.sessions.flatMap(s=>s.reels.filter(r=>r.gerendert).map(r=>({...r,session:s.id})));
+ // Auch Reels zeigen, die gerade gebaut werden — sonst verschwinden sie waehrend des Renders aus der Liste
+ // (Anne 16.09.: „ich finde den vorschnitt von claudia im tool nicht").
+ const alle=S.sessions.flatMap(s=>s.reels.map(r=>({...r,session:s.id})));
  if(!cur.slug||!alle.find(r=>r.slug===cur.slug&&r.session===cur.session)){
   m.innerHTML=`<h1>Schnitt</h1>
   ${alle.map(r=>`<div class="card" style="margin:8px 0;cursor:pointer" onclick="nav('schnitt',{session:'${esc(r.session)}',slug:'${esc(r.slug)}'})"><b>${esc(r.titel)}</b><div class="meta">${esc(r.session)} · ${r.dauer_s?Math.round(r.dauer_s)+' s':''}</div></div>`).join('')||''}`;
@@ -329,7 +344,7 @@ function vVorschnitt(){
    <div class="card" onclick="nav(window.tetDesktop?'schnitt':'reel',{session:'${esc(sid)}',slug:'${esc(r.slug)}'})">
     <div class="row" style="justify-content:space-between"><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span><span class="meta">${r.dauer_s?Math.round(r.dauer_s)+' s':''}</span></div>
     <h3 style="margin-top:8px">${esc(r.titel)}</h3>
-    <div class="meta">Viral ${r.viral?r.viral.score+'/'+r.viral.schwelle:'–'} · Sync ✓ · CTA ${esc(r.cta||'–')}</div>
+    <div class="meta">${r.gerendert?`Viral ${r.viral?r.viral.score+'/'+r.viral.schwelle:'–'} · CTA ${esc(r.cta||'–')}`:'wird gerade gebaut …'}</div>
     <div class="row" style="margin-top:10px"><button class="btn" onclick="event.stopPropagation();job(['dropbox-uebergabe','${esc(WORKP(sid))}/reels/${esc(r.slug)}'],'An CapCut übergeben');toast('Übergabe läuft: Quelle + Vorschnitt + Untertitel + Anleitung landen in Dropbox „Reels-Uebergabe/${esc(r.slug)}“. In CapCut Web aus Dropbox öffnen. Export nach „Reels-Freigabe“ → landet automatisch in 3 · Freigegeben.',10000)">▶ In CapCut bearbeiten</button><button class="btn ghost" onclick="event.stopPropagation();job(['capcut-draft','${esc(WORKP(sid))}/reels/${esc(r.slug)}'],'CapCut lokal öffnen')">auf diesem Mac öffnen</button></div>
    </div>`).join('')}</div>`).join(''):''}`;
 }
@@ -341,7 +356,7 @@ function vEingang(){
   <div class="sub">${neu} neu · ${inArbeit} in Arbeit · ${bereit} Reels bereit/freigabefähig · CTA zuletzt: <b>${esc(S.cta||'–')}</b> · Metricool: Connector-Routine${S.metricool==='token'?' + REST-Token':''} · Watch zuletzt ${esc(S.intakeZuletzt||'–')}
   &nbsp; <button class="btn ghost" onclick="job(['watch'],'Dropbox prüfen')">Dropbox jetzt prüfen</button> <label class="btn" style="cursor:pointer">⬆︎ Rohmaterial hochladen<input type=file accept=video/*,audio/* style=display:none onchange=upload(this)></label> <button class="btn ghost" onclick="uploadLink()">🔗 Link für Externe (nur Hochladen)</button></div>
   <div class="grid">${S.sessions.map(s=>`<div class="card" onclick="nav('session',{session:'${esc(s.id)}'})" title="Projekt öffnen (Verarbeitung, Kandidaten)">
-    <div class="row" style="justify-content:space-between"><span class="pill ${esc(s.status)}">${esc(LABEL[s.status]||s.status)}</span><span class="meta">${esc(s.typ||'')} · ${esc(s.material||'')}</span></div>
+    <div class="row" style="justify-content:space-between"><span class="pill ${esc(s.status)}">${esc(LABEL[s.status]||s.status)}</span>${S.aktiv&&S.aktiv.session===s.id?'<span class="pill ok">läuft gerade</span>':''}<span class="meta">${esc(s.typ||'')} · ${esc(s.material||'')}</span></div>
     <h3 style="margin-top:10px">${esc(s.id)}</h3>
     <div class="meta">${esc(s.datum||'')} ${s.dauer_s?'· '+Math.round(s.dauer_s/60)+' min':''} ${s.dateien?'· '+s.dateien+' Dateien':''} ${s.kandidaten?'· '+s.kandidaten+' Kandidaten':''} ${s.reels.length?'· '+s.reels.length+' Reels':''}</div>
     ${ladder(s.status)}<div style='height:7px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden'><i style='display:block;height:100%;width:${s.fortschritt??0}%;background:linear-gradient(90deg,var(--camel),var(--yellow))'></i></div><div class='meta' style='margin-top:4px'>${s.fortschritt??0} % verarbeitet</div></div>`).join('')}</div>
@@ -364,7 +379,8 @@ function vSession(){
   api('/api/session/'+encodeURIComponent(s.id)).then(d=>{
     const vb=$('#verlauf');
     if(vb){const v=d.verlauf||[];
-      vb.innerHTML=(d.naechster?`<div class="zuord" style="margin-bottom:10px"><b>Als Nächstes:</b> ${esc(d.naechster.text)} <span class="pill">${esc(d.naechster.wer)}</span>${d.naechster.wer==='Claude'&&!d.claude_bereit?' <span style="color:var(--red)">— Claude-Zugang fehlt (Übersicht)</span>':''}</div>`:'')
+      vb.innerHTML=(d.aktiv?`<div class="zuord" style="border-left-color:var(--green);background:#eefaf3;border-color:#bfe8cf"><b>Wird gerade bearbeitet</b> — seit ${d.aktiv.minuten??0} Min. <span class="meta" style="display:block;margin-top:4px">${esc((d.aktiv.letzte||[]).slice(-1)[0]||'')}</span></div>`:'')
+        +(d.naechster?`<div class="zuord" style="margin-bottom:10px"><b>Als Nächstes:</b> ${esc(d.naechster.text)} <span class="pill">${esc(d.naechster.wer)}</span>${d.naechster.wer==='Claude'&&!d.claude_bereit?' <span style="color:var(--red)">— Claude-Zugang fehlt (Übersicht)</span>':''}</div>`:'')
         +(v.length?`<table>${v.map(e=>`<tr><td style="white-space:nowrap;color:var(--grey)">${esc(e.zeit)}</td><td><b>${esc(e.schritt)}</b>${e.detail?'<br><small class="hint">'+esc(e.detail)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="meta">Noch nichts passiert.</p>')}
     const rb=$('#rohbox');
     if(rb){const r=d.rohmaterial||[];
@@ -410,19 +426,21 @@ async function vReel(m){
   const v=d.viralFull; const canPublish=d.qa&&v&&v.ueber_schwelle&&/FREIGABE/.test(d.sicht||'');
   m.innerHTML=`<h1>${esc(d.titel)}</h1>
   <div class="sub">${esc(cur.session)} · ${esc(d.typ||'')} · ${esc(d.variante||'')} · CTA <b>${esc(d.cta||'')}</b> · ${d.spec.frames?Math.round(d.spec.frames/30)+' s · '+d.spec.kamera+' Kamera-Keys · '+d.spec.uebergaenge+' Übergänge · '+d.spec.grafiken.length+' Grafiken':'noch nicht gebaut'}</div>
-  <div class="row" style="margin-bottom:18px">
-    <button class="btn" onclick="job(['run','${esc(dir)}'],'Reel bauen')">Bauen (run)</button>
-    <button class="btn ghost" onclick="job(['run','${esc(dir)}','--force'],'Reel neu bauen')">neu bauen</button>
-    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="claude('sicht',{session:'${esc(cur.session)}',slug:'${esc(cur.slug)}'},'QA-Sicht (Claude)')">Sicht (Claude)</button>
-    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="claude('jury',{session:'${esc(cur.session)}',slug:'${esc(cur.slug)}'},'Viral-Jury (Claude)')">Viral-Check (Claude)</button>
+  <div class="row" style="margin-bottom:10px">
+    <button class="btn" onclick="job(['dropbox-uebergabe','${esc(dir)}'],'An Nico übergeben')">An Nico übergeben (CapCut)</button>
+    <label class="btn ghost" style="cursor:pointer">Fertige Fassung hochladen<input type=file accept=video/mp4 style=display:none onchange="uploadFrei(this)"></label>
+    <button class="btn ghost" ${canPublish?'':'disabled'} title="${canPublish?'':'braucht QA PASS + Sicht FREIGABE + Viral ≥ Schwelle'}" onclick="job(['publish','${esc(dir)}'],'Freigeben + ablegen')">Freigeben</button>
+    <button class="btn ghost" onclick="reelTechnik()">Technik …</button></div>
+  <div class="row" id="reelTechnik" hidden style="margin-bottom:18px;padding:12px;background:var(--navy3);border-radius:var(--rand)">
+    <button class="btn ghost" onclick="job(['run','${esc(dir)}'],'Reel bauen')">Neu bauen</button>
+    <button class="btn ghost" onclick="job(['run','${esc(dir)}','--force'],'Reel ganz neu bauen')">Alles verwerfen und bauen</button>
+    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="claude('sicht',{session:'${esc(cur.session)}',slug:'${esc(cur.slug)}'},'QA-Sicht (Claude)')">Sicht prüfen</button>
+    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="claude('jury',{session:'${esc(cur.session)}',slug:'${esc(cur.slug)}'},'Viral-Jury (Claude)')">Viral-Check</button>
     <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['viral','${esc(dir)}'],'Viral-Score')">Score neu rechnen</button>
-    <button class="btn" ${canPublish?'':'disabled'} title="${canPublish?'':'braucht QA PASS + Sicht FREIGABE + Viral ≥ Schwelle'}" onclick="job(['publish','${esc(dir)}'],'Freigeben + ablegen')">Freigeben → Ablage</button>
     <button class="btn ghost" ${d.status==='bereit'||d.status==='freigegeben'?'':'disabled'} onclick="job(['schedule','${esc(dir)}'],'Einplanen (Metricool)')">Einplanen</button>
-    <button class="btn" onclick="job(['capcut-draft','${esc(dir)}'],'CapCut-Projekt bauen');toast('Baue CapCut-Projekt mit allen Ebenen (ca. 1 Min). Auf diesem Mac öffnet sich CapCut; von außen erscheint es per Projektsynchronisierung in CapCut unter „Speicher“.',10000)">▶ Projekt in CapCut öffnen (Desktop, mit Ebenen)</button>
-    <button class="btn" onclick="job(['dropbox-uebergabe','${esc(dir)}'],'An Dropbox übergeben')">☁︎ An Kollegen übergeben (Dropbox)</button>
-    <button class="btn ghost" onclick="job(['capcut-paket','${esc(dir)}'],'CapCut-Paket bauen')">📦 CapCut-Paket (lokal)</button>
-    <a class="btn ghost" style="text-decoration:none" href="${base}/capcut-draft-paket.zip" download>Paket laden</a>
-    <label class="btn ghost" style="cursor:pointer">⇧ CapCut-Fassung hochladen<input type=file accept=video/mp4 style=display:none onchange="uploadFrei(this)"></label></div>
+    <button class="btn ghost" onclick="job(['capcut-draft','${esc(dir)}'],'CapCut-Projekt bauen')">CapCut auf diesem Mac öffnen</button>
+    <button class="btn ghost" onclick="job(['capcut-paket','${esc(dir)}'],'CapCut-Paket bauen')">CapCut-Paket bauen</button>
+    <a class="btn ghost" style="text-decoration:none" href="${base}/capcut-draft-paket.zip" download>Paket laden</a></div>
   <div class="two"><div>
     ${d.dateien.video?`<video controls preload="metadata" src="${base}/render/reel.mp4?${d.mtime}"></video>`:''}
     <div class="sec"><h2>Schnitt · Etappe 1</h2><div id="schnitt" class="meta">lädt …</div></div>
@@ -596,6 +614,27 @@ async function rpEinplanen(btn){const tr=btn.closest('tr');const g=k=>(tr.queryS
   if(!mat||!datum)return toast('Material und Datum wählen');btn.disabled=true;
   await rpSpeichern();
   job(['einplanen',mat,datum,'--uhrzeit',uhr,'--thema',thema],'Einplanen '+datum+' '+uhr)}
+function planPflege(was){const b=document.getElementById(was==='pp'?'ppBox':'rpBox');if(b)b.hidden=!b.hidden}
+// Reel oder Story auf einen Tag legen — eigener Dialog, kein Browser-Popup
+function planEinplanen(datum){
+  const m=MATERIAL||[];
+  if(!m.length)return toast('Kein einplanbares Material gefunden');
+  const slots=['09:02','11:30','14:00','17:00','19:00','20:00'];
+  const d=document.createElement('div'); d.className='modal'; d.id='planModal';
+  d.innerHTML=`<div class="box"><h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:22px">Einplanen am ${esc(datum)}</h2>
+    <label>Beitrag</label><select id="pmMat">${m.map(x=>`<option value="${esc(x.id)}">${esc(x.titel||x.id)} · ${esc(x.typ||'')}</option>`).join('')}</select>
+    <label>Uhrzeit</label><select id="pmZeit">${slots.map(x=>`<option${x==='11:30'?' selected':''}>${x}</option>`).join('')}</select>
+    <div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn ghost" onclick="planModalZu()">Abbrechen</button>
+    <button class="btn" onclick="planModalOk('${esc(datum)}')">Einplanen</button></div></div>`;
+  d.onclick=(e)=>{if(e.target===d)planModalZu()};
+  document.body.appendChild(d);
+}
+function reelTechnik(){const e=document.getElementById('reelTechnik');if(e)e.hidden=!e.hidden}
+function planModalZu(){const d=document.getElementById('planModal');if(d)d.remove()}
+function planModalOk(datum){
+  const id=document.getElementById('pmMat').value, zeit=document.getElementById('pmZeit').value;
+  planModalZu(); job(['einplanen',id,datum,'--uhrzeit',zeit],'Einplanen am '+datum+' um '+zeit);
+}
 function vPlan(){
   if(MATERIAL===null){MATERIAL=[];api('/api/material').then(d=>{MATERIAL=d.material||[];if(view==='plan')render()})}
   // Anne 14.09.: Contentplan = Kalender + Redaktionsplan + ALLE freigegebenen Reels (CapCut-Export = freigegeben). Kein Reiter „Freigegeben" mehr.
@@ -612,33 +651,56 @@ function vPlan(){
       <div class="row" style="margin-top:10px"><video src="${r.video||'/ready/'+encodeURIComponent(r.slug)+'/reel.mp4'}" controls preload="metadata" style="width:120px;border-radius:8px"></video>
       <button class="btn" onclick="job(['schedule','${esc(r.slug)}'${z&&z.datum?`,'--datum','${esc(z.datum)}'`:''}],'Einplanen')">Einplanen${z&&z.datum?' am '+esc(z.datum):''}</button>
       <a class="btn ghost" style="text-decoration:none" href="${r.video||'/ready/'+encodeURIComponent(r.slug)+'/reel.mp4'}" download>Video</a></div></div>`}).join(''):''}),50);
+  const mk=S.metricool_kalender||null;
   return `<h1>Contentplan</h1>
+  <div class="meta" style="margin:-4px 0 14px">${mk?`Metricool · Stand ${esc(mk.stand||'').replace('T',' ')} · ${(mk.posts||[]).length} Beiträge`:'Metricool-Kalender noch nicht geholt'}</div>
   
-  <div class="kal">${days.map(d=>{const k=fmt(d);const slots=(p.slots||{})[k]||[];const rs=(p.reels||[]).filter(r=>(r.when||'').startsWith(k)||r.tag===k);const rpk=rp.filter(e=>e.datum===k);
-    return `<div class="day"><b>${['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()]} ${d.getDate()}.${d.getMonth()+1}.</b>${rpk.map(e=>`<div class="slot" style="border-left:3px solid var(--camel)" title="Redaktionsplan">${esc(e.format||'')} · ${esc(e.thema||'')}${e.reel?' ✓':''}</div>`).join('')}${rs.map(r=>`<div class="slot" title="${esc(r.status)}">${esc(r.slot||'')} ${esc(r.titel||(r.id||'').split('/').pop())}${r.gepostet?' ✓':''}</div>`).join('')}<div class="meta">${slots.join(' · ')||'–'}</div></div>`}).join('')}</div>
-  <div class="sec"><h2>Postingplan</h2>
-  <table id="ppTab"><tr><th>Tag</th><th>Wer</th><th>Format</th><th>Thema</th><th></th></tr>${(S.postingplan||[]).map(e=>ppZeile(e)).join('')}</table>
-  <div class="row" style="margin-top:10px;gap:8px"><button class="btn ghost" onclick="ppZeileNeu()">+ Zeile</button><button class="btn" onclick="ppSpeichern()">Postingplan speichern</button><span class="meta" id="ppStatus"></span></div></div>
-  <div class="sec"><h2>Redaktionsplan</h2>
-  <table id="rpTab"><tr><th>Datum</th><th>Format</th><th>Thema</th><th>Hook</th><th>CTA</th><th>Status</th><th>Einplanen</th></tr>
-  ${rp.map((e,i)=>rpZeile(e,i)).join('')}</table>
-  <div class="row" style="margin-top:10px;gap:8px"><button class="btn ghost" onclick="rpZeileNeu()">+ Zeile</button><button class="btn" onclick="rpSpeichern()">Redaktionsplan speichern</button><span class="meta" id="rpStatus"></span></div></div>
+  <div class="kal">${days.map(d=>{const k=fmt(d);const kurz=['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()];
+    const slots=(p.slots||{})[k]||[];const rs=(p.reels||[]).filter(r=>(r.when||'').startsWith(k)||r.tag===k);const rpk=rp.filter(e=>e.datum===k);
+    // Anne 16.09.: eine Zeile oben am Tag sagt, was fuer diesen Wochentag vorgesehen ist (aus dem Postingplan)
+    const rhythmus=(S.postingplan||[]).filter(e=>(e.tag||'').slice(0,2)===kurz);
+    const auf=(S.auftraege||[]).filter(a=>(a.datum||'')===k);
+    return `<div class="day"><b>${kurz} ${d.getDate()}.${d.getMonth()+1}.</b>
+      ${rhythmus.length?`<div class="tagesplan">${rhythmus.map(e=>esc([e.wer,e.format,e.thema].filter(Boolean).join(' · '))).join('<br>')}</div>`:''}
+      ${(()=>{const e=[];
+        ((S.metricool_kalender||{}).posts||[]).filter(x=>x.datum===k).forEach(x=>e.push({z:x.uhrzeit||'',h:`<div class="slot mc" title="${esc(x.text||'')}"><span class="zeit">${esc(x.uhrzeit)}</span> <span class="pill">${esc(x.typ)}</span><div class="netz">${esc((x.netzwerke||[]).join(' · '))}</div>${x.text?`<div style="font-size:11px;line-height:1.3;margin-top:3px;color:var(--grey)">${esc(x.text.slice(0,70))}…</div>`:''}${x.url?`<a href="${esc(x.url)}" target="_blank" class="netz">ansehen ↗</a>`:''}</div>`}));
+        auf.forEach(a=>e.push({z:a.uhrzeit||'',h:`<div class="slot plan"><span class="zeit">${esc(a.uhrzeit||'')}</span> ${esc(a.thema||a.titel||a.typ||'')}<div class="netz">${esc(a.status||'')}</div></div>`}));
+        rs.forEach(r=>e.push({z:r.slot||'',h:`<div class="slot plan"><span class="zeit">${esc(r.slot||'')}</span> ${esc(r.titel||(r.id||'').split('/').pop())}${r.gepostet?' ✓':''}</div>`}));
+        rpk.forEach(x=>e.push({z:'',h:`<div class="slot rp">${esc(x.format||'')} · ${esc(x.thema||'')}${x.reel?' ✓':''}</div>`}));
+        slots.forEach(x=>e.push({z:x,h:`<div class="slot"><span class="zeit">${esc(x)}</span> <span class="netz">frei</span></div>`}));
+        return e.sort((a,b)=>String(a.z).localeCompare(String(b.z))).map(x=>x.h).join('')})()}
+      <button class="tagplus" onclick="planEinplanen('${k}')">+ einplanen</button></div>`}).join('')}</div>
+  <div class="sec"><h2>Pflege</h2>
+  <div class="row" style="gap:8px"><button class="btn ghost" onclick="planPflege('pp')">Postingplan bearbeiten</button><button class="btn ghost" onclick="planPflege('rp')">Redaktionsplan bearbeiten</button></div>
+  <div id="ppBox" hidden style="margin-top:12px">
+   <table id="ppTab"><tr><th>Tag</th><th>Wer</th><th>Format</th><th>Thema</th><th></th></tr>${(S.postingplan||[]).map(e=>ppZeile(e)).join('')}</table>
+   <div class="row" style="margin-top:10px;gap:8px"><button class="btn ghost" onclick="ppZeileNeu()">+ Zeile</button><button class="btn" onclick="ppSpeichern()">Postingplan speichern</button><span class="meta" id="ppStatus"></span></div></div>
+  <div id="rpBox" hidden style="margin-top:12px">
+   <table id="rpTab"><tr><th>Datum</th><th>Format</th><th>Thema</th><th>Hook</th><th>CTA</th><th>Status</th><th>Einplanen</th></tr>
+   ${rp.map((e,i)=>rpZeile(e,i)).join('')}</table>
+   <div class="row" style="margin-top:10px;gap:8px"><button class="btn ghost" onclick="rpZeileNeu()">+ Zeile</button><button class="btn" onclick="rpSpeichern()">Redaktionsplan speichern</button><span class="meta" id="rpStatus"></span></div></div></div>
   <div class="sec"><h2>Eingeplant</h2>${(S.auftraege||[]).length?`<table><tr><th>Datum</th><th>Typ</th><th>Titel</th><th>Status</th></tr>${(S.auftraege||[]).slice().reverse().map(a=>`<tr><td>${esc(a.datum)} ${esc(a.uhrzeit||'')}</td><td>${esc(a.typ)}</td><td>${esc(a.thema||a.titel)}</td><td><span class="pill ${a.status==='gepostet'?'freigegeben':''}">${esc(a.status)}${a.metricool_id?' · '+esc(a.metricool_id):''}</span>${a.fehler?'<br><small style="color:var(--red)">'+esc(a.fehler)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="meta">–</p>'}</div>
   <div class="sec" style="border:0;padding:0"><h2>Freigegeben — bereit zum Einplanen</h2><div class="grid" id="freiliste">lädt …</div></div>
   <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>`;
 }
 async function vKpi(m){
   // Anne 14.09.: dienstags KPI-Meeting = App öffnen -> KPI -> alles da.
-  m.innerHTML='<h1>KPI</h1>';
+  m.innerHTML='<h1>KPI</h1><p class="meta">lädt …</p>';
   const d=await api('/api/kpi'); const posts=(d.posts||[]).slice().sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||''));
   const snaps=d.snapshots||[]; const last=snaps[snaps.length-1]||{}; const prev=snaps[snaps.length-2]||{};
   const f=(x)=>x==null?'–':Number(x).toLocaleString('de-DE');
   const kwOf=(dt)=>{const x=new Date(dt);const t=new Date(Date.UTC(x.getFullYear(),x.getMonth(),x.getDate()));const day=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-day);const y=new Date(Date.UTC(t.getUTCFullYear(),0,1));return Math.ceil((((t-y)/864e5)+1)/7)};
   const kw='KW'+kwOf(new Date()); const mw=(d.meeting||{})[kw]||{};
+  // Anne 16.09.: „auf der KPI seite erwarte ich unsere Übersicht, die ich jeden Dienstag nutzen kann"
+  // -> der echte Dienstags-Report, so wie er im Meeting läuft
+  const berichtHtml=d.bericht?`<div class="sec" style="border:0;padding:0;margin-bottom:22px">
+    <div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Dienstags-Report · Stand ${esc(d.bericht.stand||'')}</h2>
+    <a class="btn ghost" style="text-decoration:none" href="${d.bericht.url}" target="_blank">in neuem Fenster öffnen</a></div>
+    <iframe src="${d.bericht.url}" style="width:100%;height:1600px;border:1px solid var(--line);border-radius:var(--rand);background:#fff;margin-top:10px"></iframe></div>`:''
   const fol=last.instagram?.followers, folPrev=prev.instagram?.followers;
   const week=posts.filter(p=>Date.now()-new Date(p.timestamp).getTime()<7*864e5);
   const sum=(arr,k)=>arr.reduce((a,p)=>a+(+p[k]||0),0);
-  m.innerHTML=`<h1>KPI</h1>
+  m.innerHTML=`<h1>KPI</h1>${berichtHtml}
   
   <div class="kpi-grid">
    <div class="kpi"><span>Follower (Instagram)</span><b>${f(fol)}</b><span>${folPrev!=null&&fol!=null?(fol-folPrev>=0?'+':'')+f(fol-folPrev)+' zur Vorwoche':''}</span></div>

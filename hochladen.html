@@ -64,7 +64,7 @@ textarea{min-height:110px;resize:vertical}
 </div>
 </main>
 <script>
-function cutterSicht(){const a=(document.querySelector('input[name=art]:checked')||{}).value;const b=document.getElementById('cutterBlock');if(b){b.hidden=(a!=='reel');if(a!=='reel'){zusatz=[];const l=document.getElementById('listZ');if(l)l.innerHTML='';const n=document.getElementById('notizen');if(n)n.value=''}}}
+function cutterSicht(){const a=(document.querySelector('input[name=art]:checked')||{}).value;const b=document.getElementById('cutterBlock');if(b){b.hidden=(a==='heute');if(a==='heute'){zusatz=[];const l=document.getElementById('listZ');if(l)l.innerHTML='';const n=document.getElementById('notizen');if(n)n.value=''}}}
 document.querySelectorAll('input[name=art]').forEach(r=>r.addEventListener('change',cutterSicht));
 const KEY=new URLSearchParams(location.search).get('key')||'';
 const $=(s)=>document.querySelector(s);
@@ -80,7 +80,7 @@ function put(url,file,onProg){return new Promise((res,rej)=>{const x=new XMLHttp
 $('#senden').onclick=async()=>{
   if(!video)return; const btn=$('#senden'); btn.disabled=true; $('#err').textContent=''; const bar=$('#bar'); bar.hidden=false; const fill=bar.querySelector('i');
   try{
-    const meta=await fetch('/api/upload-paket?key='+encodeURIComponent(KEY),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:video.name,art:(document.querySelector('input[name=art]:checked')||{}).value||'reel',notizen:((document.querySelector('input[name=art]:checked')||{}).value==='reel')?$('#notizen').value:'',absender:$('#absender').value,zusatz:((document.querySelector('input[name=art]:checked')||{}).value==='reel')?zusatz.map(f=>f.name):[]})}).then(r=>r.json());
+    const meta=await fetch('/api/upload-paket?key='+encodeURIComponent(KEY),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:video.name,art:(document.querySelector('input[name=art]:checked')||{}).value||'reel',notizen:((document.querySelector('input[name=art]:checked')||{}).value!=='heute')?$('#notizen').value:'',absender:$('#absender').value,zusatz:((document.querySelector('input[name=art]:checked')||{}).value!=='heute')?zusatz.map(f=>f.name):[]})}).then(r=>r.json());
     if(!meta.ok)throw new Error(meta.error||'Paket konnte nicht angelegt werden');
     const total=video.size+zusatz.reduce((a,f)=>a+f.size,0); let done=0;
     await put(`/api/upload-paket/datei?key=${encodeURIComponent(KEY)}&paket=${encodeURIComponent(meta.id)}&art=video&name=${encodeURIComponent(video.name)}`,video,p=>fill.style.width=((done+p*video.size)/total*100)+'%'); done+=video.size;
