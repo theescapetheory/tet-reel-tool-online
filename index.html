@@ -146,7 +146,8 @@ function render(){
 // --- Claude-Zugang (API-Key des Team-Kontos, liegt nur in ~/.config/tet-reel/anthropic.json)
 async function claudeZugang(){const el=document.getElementById('claudeZugang'); if(!el)return; if(window.HOSTED){el.innerHTML='';return} const z=await api('/api/claude-zugang');
   el.innerHTML=`<div class="row" style="gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap"><b>Claude</b><span class="pill ${z.key?'freigegeben':''}">${z.key?'API-Key …'+esc(z.ende):'Login von Anne'}</span>
-  <input id="apiKey" type="password" placeholder="sk-ant-…" style="font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;width:260px"><button class="btn ghost" onclick="claudeZugangSpeichern()">Speichern</button>${z.key?'<button class="btn ghost" onclick="claudeZugangSpeichern(true)">Entfernen</button>':''}</div>`}
+  <input id="apiKey" type="password" placeholder="sk-ant-…" style="font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;width:260px"><button class="btn ghost" onclick="claudeZugangSpeichern()">Speichern</button>${z.key?'<button class="btn ghost" onclick="claudeZugangSpeichern(true)">Entfernen</button>':''}
+  ${z.nutzung&&z.nutzung.laeufe?`<span class="meta">heute ${z.nutzung.laeufe} Redaktionen · ${Math.round((z.nutzung.rein||0)/1000)}k rein · ${Math.round((z.nutzung.raus||0)/1000)}k raus</span>`:''}</div>`}
 async function claudeZugangSpeichern(loeschen){const k=loeschen?'':document.getElementById('apiKey').value.trim(); const r=await post('/api/claude-zugang',{api_key:k}); toast(r.error||(r.key?'✓ Claude läuft über den API-Key':'✓ Key entfernt')); claudeZugang()}
 // --- Upload-Paket (Anne 15.09.): Art + Video + Zusatzmaterial + Notizen — dasselbe Formular wie auf der externen Seite
 function uplFormular(ziel, key){
