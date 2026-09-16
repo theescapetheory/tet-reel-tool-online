@@ -36,7 +36,7 @@ function login(req, res) {
   if (!PASS) return true;
   const h = req.headers.authorization || "";
   if (h.startsWith("Basic ")) { const [, pw] = Buffer.from(h.slice(6), "base64").toString().split(/:(.*)/s); if (pw === PASS) return true; }
-  res.writeHead(401, { "WWW-Authenticate": 'Basic realm="TET Reel-Tool"', "Content-Type": "text/plain; charset=utf-8" }); res.end("Login"); return false;
+  res.writeHead(401, { "WWW-Authenticate": 'Basic realm="escape-cut"', "Content-Type": "text/plain; charset=utf-8" }); res.end("Login"); return false;
 }
 function syncOk(req) { return SECRET && (req.headers.authorization || "") === "Bearer " + SECRET; }
 
@@ -173,4 +173,4 @@ const server = http.createServer(async (req, res) => {
     sendJSON(res, 405, {});
   } catch (e) { sendJSON(res, 500, { error: String(e.message).slice(0, 300) }); }
 });
-server.listen(PORT, () => console.log(`TET Reel-Tool online auf :${PORT} · Daten ${DATA} · Login ${PASS ? "an" : "AUS"} · Sync ${SECRET ? "an" : "AUS"}`));
+server.listen(PORT, () => console.log(`escape-cut online auf :${PORT} · Daten ${DATA} · Login ${PASS ? "an" : "AUS"} · Sync ${SECRET ? "an" : "AUS"}`));
