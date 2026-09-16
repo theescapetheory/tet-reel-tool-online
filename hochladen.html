@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Escape Theory · Material hochladen</title>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0d1526;--camel:#cdb08f;--yellow:#FDDF5B;--bg:#f6f7fb;--card:#fff;--line:#e6e8ef;--grey:#6b7280;--red:#c0392b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:15px/1.5 Jost,system-ui,sans-serif;color:var(--navy)}
+header{display:flex;align-items:center;gap:12px;padding:18px 22px;background:var(--card);border-bottom:1px solid var(--line)}
+header .brand{font-weight:800;letter-spacing:.16em;font-size:12px;text-transform:uppercase;color:var(--camel)}
+header .brand::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--yellow);margin-right:10px}
+main{max-width:720px;margin:0 auto;padding:22px 16px 60px}
+h1{font-size:26px;margin:0 0 6px;font-weight:800}.sub{color:var(--grey);margin-bottom:22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 1px 0 rgba(13,21,38,.04)}
+label{display:block;font-weight:600;margin-bottom:6px}.hint{color:var(--grey);font-size:13px;margin-top:6px}
+input[type=text],textarea{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+textarea{min-height:110px;resize:vertical}
+.drop{border:2px dashed #c9cedb;border-radius:14px;padding:26px;text-align:center;color:var(--grey);cursor:pointer;background:#fafbfe}
+.drop.on{border-color:var(--yellow);background:#fffdf0}.drop b{color:var(--navy)}
+.files{margin-top:10px;font-size:13px}.files div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}
+.bar{height:8px;background:#eceef4;border-radius:6px;overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;width:0;background:var(--yellow);transition:width .2s}
+.btn{display:inline-block;font:inherit;font-weight:700;padding:13px 22px;border-radius:12px;border:0;background:var(--navy);color:#fff;cursor:pointer;width:100%;font-size:16px}
+.btn:disabled{opacity:.45;cursor:default}
+.ok{background:#e8f8ee;border:1px solid #bfe8cf;border-radius:12px;padding:16px;margin-top:16px}
+.err{color:var(--red);font-weight:600;margin-top:10px}
+</style></head><body>
+<header><div class="brand">The Escape Theory · Material hochladen</div></header>
+<main>
+<h1>Material hochladen</h1>
+
+
+<div class="card">
+  <label>Was lädst du hoch?</label>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <label style="flex:1;min-width:180px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer"><input type="radio" name="art" value="reel" checked> <b>Reel-Material</b></label>
+    <label style="flex:1;min-width:180px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer"><input type="radio" name="art" value="story"> <b>Story-Material (Plan)</b></label>
+    <label style="flex:1;min-width:180px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;background:#fffdf0"><input type="radio" name="art" value="heute"> <b>⚡ Story HEUTE</b></label>
+  </div>
+</div>
+
+<div class="card">
+  <label>1 · Hauptmaterial (Video)</label>
+  <div class="drop" id="dropV"><b>Video hier ablegen</b> oder klicken</div>
+  <input type="file" id="video" accept="video/*" hidden>
+  <div class="files" id="listV"></div>
+</div>
+
+<div class="card" id="cutterBlock">
+  <label>2 · Zusatzmaterial</label>
+  <div class="drop" id="dropZ"><b>Bilder, Slides, Screenshots</b> hier ablegen oder klicken</div>
+  <input type="file" id="zusatz" accept="image/*,.pdf" multiple hidden>
+  <div class="files" id="listZ"></div>
+  <label style="margin-top:16px">3 · Notizen für den Cutter</label>
+  <textarea id="notizen" placeholder="z. B. Bild bei 0:03 einblenden"></textarea>
+  
+</div>
+
+<div class="card">
+  <label>Absender</label>
+  <input type="text" id="absender" placeholder="Dein Name oder Team">
+  <div class="bar" id="bar" hidden><i></i></div>
+  <div style="margin-top:14px"><button class="btn" id="senden" disabled>Hochladen</button></div>
+  <div class="err" id="err"></div>
+  <div class="ok" id="ok" hidden></div>
+</div>
+</main>
+<script>
+function cutterSicht(){const a=(document.querySelector('input[name=art]:checked')||{}).value;const b=document.getElementById('cutterBlock');if(b){b.hidden=(a!=='reel');if(a!=='reel'){zusatz=[];const l=document.getElementById('listZ');if(l)l.innerHTML='';const n=document.getElementById('notizen');if(n)n.value=''}}}
+document.querySelectorAll('input[name=art]').forEach(r=>r.addEventListener('change',cutterSicht));
+const KEY=new URLSearchParams(location.search).get('key')||'';
+const $=(s)=>document.querySelector(s);
+let video=null, zusatz=[];
+function bind(drop,input,onFiles){drop.onclick=()=>input.click();input.onchange=()=>onFiles([...input.files]);
+ ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('on')}));
+ ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('on')}));
+ drop.addEventListener('drop',ev=>onFiles([...ev.dataTransfer.files]));}
+const mb=(n)=>Math.round(n/1e6)+' MB';
+bind($('#dropV'),$('#video'),fs=>{video=fs.find(f=>/video|\.(mp4|mov|m4v)$/i.test(f.type+f.name))||null;$('#listV').innerHTML=video?`<div><span>${video.name}</span><span>${mb(video.size)}</span></div>`:'';$('#senden').disabled=!video});
+bind($('#dropZ'),$('#zusatz'),fs=>{zusatz=zusatz.concat(fs);$('#listZ').innerHTML=zusatz.map(f=>`<div><span>${f.name}</span><span>${mb(f.size)}</span></div>`).join('')});
+function put(url,file,onProg){return new Promise((res,rej)=>{const x=new XMLHttpRequest();x.open('POST',url);x.upload.onprogress=e=>onProg&&onProg(e.loaded/e.total);x.onload=()=>x.status<300?res(JSON.parse(x.responseText)):rej(new Error(x.responseText||x.status));x.onerror=()=>rej(new Error('Netzwerkfehler'));x.send(file)})}
+$('#senden').onclick=async()=>{
+  if(!video)return; const btn=$('#senden'); btn.disabled=true; $('#err').textContent=''; const bar=$('#bar'); bar.hidden=false; const fill=bar.querySelector('i');
+  try{
+    const meta=await fetch('/api/upload-paket?key='+encodeURIComponent(KEY),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:video.name,art:(document.querySelector('input[name=art]:checked')||{}).value||'reel',notizen:((document.querySelector('input[name=art]:checked')||{}).value==='reel')?$('#notizen').value:'',absender:$('#absender').value,zusatz:((document.querySelector('input[name=art]:checked')||{}).value==='reel')?zusatz.map(f=>f.name):[]})}).then(r=>r.json());
+    if(!meta.ok)throw new Error(meta.error||'Paket konnte nicht angelegt werden');
+    const total=video.size+zusatz.reduce((a,f)=>a+f.size,0); let done=0;
+    await put(`/api/upload-paket/datei?key=${encodeURIComponent(KEY)}&paket=${encodeURIComponent(meta.id)}&art=video&name=${encodeURIComponent(video.name)}`,video,p=>fill.style.width=((done+p*video.size)/total*100)+'%'); done+=video.size;
+    for(const f of zusatz){await put(`/api/upload-paket/datei?key=${encodeURIComponent(KEY)}&paket=${encodeURIComponent(meta.id)}&art=zusatz&name=${encodeURIComponent(f.name)}`,f,p=>fill.style.width=((done+p*f.size)/total*100)+'%');done+=f.size}
+    await fetch(`/api/upload-paket/fertig?key=${encodeURIComponent(KEY)}&paket=${encodeURIComponent(meta.id)}`,{method:'POST'});
+    fill.style.width='100%'; $('#ok').hidden=false; const art=(document.querySelector('input[name=art]:checked')||{}).value; $('#ok').innerHTML=`<b>Angekommen.</b> „${video.name}“${zusatz.length?' + '+zusatz.length+' Zusatzdatei(en)':''} — ${art==='heute'?'Story bekommt jetzt Untertitel und geht in wenigen Minuten online.':art==='story'?'liegt in der Story-Planung.':'liegt im Eingang und wird verarbeitet.'} Danke!`;
+    video=null; zusatz=[]; $('#listV').innerHTML=''; $('#listZ').innerHTML=''; $('#notizen').value='';
+  }catch(e){$('#err').textContent='Fehler: '+e.message; btn.disabled=false}
+};
+</script>
+</body></html>

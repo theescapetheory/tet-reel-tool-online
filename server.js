@@ -101,8 +101,18 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 404, {});
     }
     if (p === "/api/online") return sendJSON(res, 200, { stand: snapshot.stand || snapshot.empfangen || null, offen: actions.filter((a) => a.status === "wartet").length });   // Health-Check, ohne Login
+    // ---------- Hochlade-Link fuer Externe: ohne Login, nur mit Schluessel (Anne 16.09.) ----------
+    const UPKEY = process.env.UPLOAD_KEY || snapshot.upload_key || "";
+    const keyOk = !!UPKEY && (u.searchParams.get("key") || "") === UPKEY;
+    if (p === "/hochladen") {
+      if (!keyOk) { res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Link ungültig"); }
+      const f = [path.join(__dirname, "hochladen.html"), path.join(__dirname, "..", "public", "hochladen.html")].find((x) => fs.existsSync(x));
+      if (!f) { res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Seite fehlt"); }
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" }); return res.end(fs.readFileSync(f));
+    }
+    const extern = keyOk && p.startsWith("/api/upload-paket");
     // ---------- Nutzer ----------
-    if (!login(req, res)) return;
+    if (!extern && !login(req, res)) return;
     if (p === "/" || p === "/index.html") {
       let html = fs.readFileSync(INDEX, "utf8");
       const kopf = `<script>window.HOSTED=true;window.HOSTED_STAND=${JSON.stringify(snapshot.stand || snapshot.empfangen || null)};window.DROPBOX_LINKS=${JSON.stringify(snapshot.dropbox_links || {})};</script>`;
@@ -119,7 +129,10 @@ const server = http.createServer(async (req, res) => {
         const a = actions.find((x) => x.id === id);
         return sendJSON(res, 200, { status: a ? (a.status === "wartet" ? "läuft" : a.status) : "läuft", log: a ? `${a.status === "wartet" ? "Wartet auf den Rechner …" : JSON.stringify(a.ergebnis || {})}` : "…" });
       }
-      if (p === "/api/upload-link") return sendJSON(res, 200, { link: null, dropbox: snapshot.dropbox_links || {} });
+      if (p === "/api/upload-link") {
+        const host = req.headers.host || "", proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0];
+        return sendJSON(res, 200, { link: UPKEY && host ? `${proto}://${host}/hochladen?key=${UPKEY}` : null, dropbox: snapshot.dropbox_links || {} });
+      }
       for (const pre of ["/files/", "/ready/", "/cover/", "/stories/"]) {
         if (p.startsWith(pre)) {
           const f = safe(ASSETS, decodeURIComponent(p)); if (!f || !fs.existsSync(f)) { res.writeHead(404); return res.end("noch nicht synchronisiert"); }

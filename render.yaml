@@ -6,6 +6,7 @@ services:
     buildCommand: ""
     startCommand: node server.js
     healthCheckPath: /api/online
+    autoDeploy: true
     envVars:
       - key: COCKPIT_PASS
         sync: false
