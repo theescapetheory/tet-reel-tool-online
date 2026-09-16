@@ -1,4 +1,8 @@
-# TET Reel-Tool online stellen (ca. 15 Minuten)
+# TET Reel-Tool online
+
+**Live-Adresse: https://tet-reel-tool.onrender.com** (Render, Workspace TET, Blueprint aus dem öffentlichen Spiegel-Repo `theescapetheory/tet-reel-tool-online`). Nach Änderungen an der Oberfläche: `bash cockpit/hosted/publish.sh`, dann in Render beim Blueprint „Manual sync".
+
+## Einrichtung (erledigt am 16.09.2026)
 
 Das Tool besteht aus zwei Teilen: der **Oberfläche** (diese App, läuft beim Hoster) und der **Engine**
 (Transkript, Schnitt, CapCut-Projekte), die auf einem Rechner läuft und alle 60 Sekunden mit der

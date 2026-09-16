@@ -127,12 +127,7 @@ async function claudeZugangSpeichern(loeschen){const k=loeschen?'':document.getE
 // --- Upload-Paket (Anne 15.09.): Art + Video + Zusatzmaterial + Notizen — dasselbe Formular wie auf der externen Seite
 function uplFormular(ziel, key){
   const el=document.getElementById(ziel); if(!el) return;
-  if(window.HOSTED){const L=window.DROPBOX_LINKS||{};
-    el.innerHTML=`<div class="row" style="gap:8px;flex-wrap:wrap">
-      ${L.reel?`<a class="btn" target="_blank" rel="noopener" href="${esc(L.reel)}">Reel-Material</a>`:''}
-      ${L.story?`<a class="btn ghost" target="_blank" rel="noopener" href="${esc(L.story)}">Story-Material (Plan)</a>`:''}
-      ${L.heute?`<a class="btn ghost" target="_blank" rel="noopener" href="${esc(L.heute)}">⚡ Story HEUTE</a>`:''}</div>`;
-    return}
+
   el.innerHTML=`<div style="max-width:760px;width:100%">
     <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:12px" id="uplArt">
       <button class="btn" data-art="reel" onclick="uplArtWahl('reel')">Reel-Material</button>
@@ -343,7 +338,8 @@ function vSession(){
       :`<p class="sub">Noch keine Kandidaten. ${d.transkript?'':'Erst Transkript erzeugen, dann '}Claude die Redaktion machen lassen.</p>`;
     const cl=$('#cleanup');if(cl&&Array.isArray(d.cleanup)){const n=(t)=>d.cleanup.filter(c=>c.typ===t).length;cl.textContent=`Aufräumen: ${n('fuellwort')} Füllwörter · ${n('stotterer')} Stotterer · ${n('falschstart')} Falschstarts`}});
   return `<h1>${esc(s.id)}${String(s.id).startsWith('upload-')?` <button class="btn ghost" style="font-size:12px" onclick="sessionEntfernen('${esc(s.id)}')">✕ aus dem Eingang entfernen</button>`:''}</h1>
-  <div class="sub">${esc(s.typ||'')} · ${esc(s.material||'')} · ${esc(s.pfad||'')}</div>
+  <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">${(()=>{const p=String(s.pfad||'');const i=p.indexOf('Dropbox-LoveLifePassport/');const db=i>=0?'https://www.dropbox.com/home/'+p.slice(i+25).split('/').map(encodeURIComponent).join('/'):null;const f='/files/'+encodeURIComponent(s.id)+'/';
+    return `<span class="pill">${esc(s.typ||'')}</span><span class="pill">${esc(s.material||'')}</span>${db?`<a class="btn ghost" target="_blank" rel="noopener" href="${db}">Dropbox-Ordner ↗</a>`:''}${s.transkript?`<a class="btn ghost" target="_blank" href="${f}transkript.indexed.txt">Transkript ↗</a>`:''}${s.kandidaten?`<a class="btn ghost" target="_blank" href="${f}kandidaten-paket.md">Kandidaten-Paket ↗</a>`:''}`})()}</div>
   ${s.notizen||(s.zusatz&&s.zusatz.length)?`<div class="zuord" style="margin-bottom:12px"><b>Hinweise vom Absender${s.absender?' ('+esc(s.absender)+')':''}:</b> ${esc(s.notizen||'–')}${s.zusatz&&s.zusatz.length?'<br><b>Zusatzmaterial:</b> '+s.zusatz.map(esc).join(', '):''}</div>`:''}
   <div class="row" style="margin-bottom:18px">
     ${(()=>{const zoom=s.typ==='zoom'||s.material==='zoom'; const eingelesen=!zoom||s.status!=='neu'; return `
@@ -355,7 +351,7 @@ function vSession(){
   
   <div class="two"><div><div class="sec" style="border:0;padding:0;margin:0"><h2>Kandidaten</h2><div id="kand">lädt …</div></div></div>
   <div><div class="sec" style="border:0;padding:0;margin:0"><h2>Reels dieser Session</h2>
-    ${s.reels.length?`<table><tr><th>Reel</th><th>Status</th><th>Viral</th><th>QA</th><th>Sicht</th><th></th></tr>${s.reels.map(r=>`<tr><td><b>${esc(r.titel)}</b><br><small class="hint">${esc(r.slug)} · ${esc(r.typ||'')} · ${r.dauer_s?Math.round(r.dauer_s)+' s':''} · CTA ${esc(r.cta||'')}</small></td><td><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span></td><td>${r.viral?r.viral.score+' / '+r.viral.schwelle:'–'}</td><td>${r.qa===true?'✓':r.qa===false?'✗':'–'}</td><td>${esc(r.sicht||'–')}</td><td><button class="btn ghost" onclick="nav('reel',{session:'${esc(s.id)}',slug:'${esc(r.slug)}'})">öffnen</button></td></tr>`).join('')}</table>`:''}
+    ${s.reels.length?`<table><tr><th>Reel</th><th>Status</th><th>Viral</th><th>QA</th><th>Sicht</th><th></th></tr>${s.reels.map(r=>`<tr><td>${r.status!=='angelegt'?`<video src="/files/${encodeURIComponent(s.id)}/reels/${encodeURIComponent(r.slug)}/render/reel.mp4" preload="metadata" controls style="width:90px;border-radius:8px;float:left;margin-right:10px"></video>`:''}<b>${esc(r.titel)}</b><br><small class="hint">${esc(r.slug)} · ${esc(r.typ||'')} · ${r.dauer_s?Math.round(r.dauer_s)+' s':''} · CTA ${esc(r.cta||'')} · ${r.status==='angelegt'?'in Arbeit':'Vorschnitt fertig'}</small></td><td><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span></td><td>${r.viral?r.viral.score+' / '+r.viral.schwelle:'–'}</td><td>${r.qa===true?'✓':r.qa===false?'✗':'–'}</td><td>${esc(r.sicht||'–')}</td><td><button class="btn ghost" onclick="nav('reel',{session:'${esc(s.id)}',slug:'${esc(r.slug)}'})">öffnen</button></td></tr>`).join('')}</table>`:''}
     <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre><div id="claudeout" class="sub" style="margin-top:10px;white-space:pre-wrap"></div></div></div></div>`;
 }
 const WORKP=(id)=>'~/tet-reel-work/'.replace('~',HOME)+id;

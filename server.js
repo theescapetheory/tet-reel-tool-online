@@ -9,7 +9,18 @@ const PASS = process.env.COCKPIT_PASS || "";
 const SECRET = process.env.SYNC_SECRET || "";
 const DATA = process.env.DATA_DIR || path.join(__dirname, "data");
 const ASSETS = path.join(DATA, "assets");
-fs.mkdirSync(ASSETS, { recursive: true });
+const UPLOADS = path.join(DATA, "uploads");          // Relais: Nutzer laden hier hoch, der Rechner holt ab und loescht
+fs.mkdirSync(ASSETS, { recursive: true }); fs.mkdirSync(UPLOADS, { recursive: true });
+const MAX_UPLOAD = 3 * 1024 * 1024 * 1024;
+const sauber = (s) => String(s || "").replace(/[^\w.\-äöüÄÖÜß ]+/g, "_").slice(0, 120) || "datei";
+function streamZu(req, file, limit) {
+  return new Promise((ok, bad) => {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const out = fs.createWriteStream(file); let n = 0;
+    req.on("data", (d) => { n += d.length; if (n > limit) { out.destroy(); req.destroy(); bad(new Error("zu gross")); } });
+    req.on("error", bad); out.on("error", bad); out.on("finish", () => ok(n)); req.pipe(out);
+  });
+}
 const INDEX = [path.join(__dirname, "index.html"), path.join(__dirname, "..", "public", "index.html")].find((f) => fs.existsSync(f));
 const MIME = { ".html": "text/html; charset=utf-8", ".json": "application/json", ".mp4": "video/mp4", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".md": "text/plain; charset=utf-8", ".txt": "text/plain; charset=utf-8", ".svg": "image/svg+xml" };
 
@@ -71,6 +82,21 @@ const server = http.createServer(async (req, res) => {
         const mt = Number(u.searchParams.get("mtime") || 0); if (mt) fs.utimesSync(f, mt, mt);
         return sendJSON(res, 200, { ok: true });
       }
+      if (p === "/sync/uploads") {
+        const out = [];
+        for (const id of fs.readdirSync(UPLOADS)) {
+          const meta = readJSON(path.join(UPLOADS, id, "paket.json"), null); if (!meta || meta.status !== "bereit") continue;
+          const dateien = []; const walk = (d, rel) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const r = rel ? rel + "/" + e.name : e.name; if (e.isDirectory()) walk(path.join(d, e.name), r); else if (e.name !== "paket.json") dateien.push({ rel: r, size: fs.statSync(path.join(d, e.name)).size }); } };
+          walk(path.join(UPLOADS, id), ""); out.push({ ...meta, dateien });
+        }
+        return sendJSON(res, 200, { uploads: out });
+      }
+      if (p === "/sync/upload-datei") {
+        const id = sauber(u.searchParams.get("paket")), rel = decodeURIComponent(u.searchParams.get("rel") || ""); const f = safe(path.join(UPLOADS, id), rel);
+        if (!f || !fs.existsSync(f)) return sendJSON(res, 404, {});
+        res.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Length": fs.statSync(f).size }); return fs.createReadStream(f).pipe(res);
+      }
+      if (p === "/sync/upload" && req.method === "DELETE") { const d = safe(UPLOADS, sauber(u.searchParams.get("paket"))); if (d && fs.existsSync(d)) fs.rmSync(d, { recursive: true, force: true }); return sendJSON(res, 200, { ok: true }); }
       if (p === "/sync/asset" && req.method === "DELETE") { const f = safe(ASSETS, decodeURIComponent(u.searchParams.get("path") || "")); if (f && fs.existsSync(f)) fs.unlinkSync(f); return sendJSON(res, 200, { ok: true }); }
       return sendJSON(res, 404, {});
     }
@@ -105,7 +131,25 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 404, { error: "nicht da" });
     }
     if (req.method === "POST") {
-      if (p.startsWith("/api/upload")) return sendJSON(res, 400, { error: "Online bitte direkt in die Dropbox laden (Knöpfe in der Übersicht)" });
+      if (p === "/api/upload-paket") {
+        const b = JSON.parse((await readBody(req)).toString("utf8") || "{}");
+        const id = "upload-" + new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "-") + "-" + sauber(path.parse(b.name || "video").name).replace(/\s+/g, "-").toLowerCase();
+        const art = ["reel", "story", "heute"].includes(b.art) ? b.art : "reel";
+        writeJSON(path.join(UPLOADS, id, "paket.json"), { id, name: b.name, art, absender: b.absender || "", notizen: b.notizen || "", zusatz: b.zusatz || [], eingang: new Date().toISOString(), status: "offen", quelle: "online" });
+        return sendJSON(res, 200, { ok: true, id });
+      }
+      if (p === "/api/upload-paket/datei") {
+        const id = sauber(u.searchParams.get("paket")), art = u.searchParams.get("art") === "zusatz" ? "zusatz" : "video", name = sauber(decodeURIComponent(u.searchParams.get("name") || "datei"));
+        if (!fs.existsSync(path.join(UPLOADS, id, "paket.json"))) return sendJSON(res, 404, { error: "Paket unbekannt" });
+        const f = art === "zusatz" ? path.join(UPLOADS, id, "zusatz", name) : path.join(UPLOADS, id, name);
+        try { const n = await streamZu(req, f, MAX_UPLOAD); return sendJSON(res, 200, { ok: true, bytes: n }); } catch (e) { return sendJSON(res, 413, { error: e.message }); }
+      }
+      if (p === "/api/upload-paket/fertig") {
+        const id = sauber(u.searchParams.get("paket")); const mf = path.join(UPLOADS, id, "paket.json"); const meta = readJSON(mf, null);
+        if (!meta) return sendJSON(res, 404, { error: "Paket unbekannt" });
+        meta.status = "bereit"; writeJSON(mf, meta); return sendJSON(res, 200, { ok: true, id, art: meta.art });
+      }
+      if (p.startsWith("/api/upload")) return sendJSON(res, 400, { error: "nicht verfuegbar" });
       let body = {}; try { body = JSON.parse((await readBody(req)).toString("utf8") || "{}"); } catch {}
       const a = queue("http", p, "POST", body); optimistic(p, body);
       if (p === "/api/job") return sendJSON(res, 200, { id: a.id, queued: true });
