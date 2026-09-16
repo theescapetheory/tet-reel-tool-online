@@ -142,6 +142,7 @@ function render(){
   if(view==='ueber') return vUeber(m);
   if(view==='eingang') return m.innerHTML=vEingang();
   if(view==='storyroh') return vStoryRoh(m);
+  if(view==='karussell') return vKarussell(m);
   if(view==='vorschnitt') return m.innerHTML=vVorschnitt();
   if(view==='frei') return nav('plan');
   if(view==='kpi') return vKpi(m);
@@ -169,14 +170,16 @@ function uplFormular(ziel, key){
     <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:12px" id="uplArt">
       <button class="btn" data-art="reel" onclick="uplArtWahl('reel')">Reel-Material</button>
       <button class="btn ghost" data-art="story" title="schnittfertig — es kommen nur Untertitel drauf" onclick="uplArtWahl('story')">Story-Material (Plan)</button>
+      <button class="btn ghost" data-art="karussell" onclick="uplArtWahl('karussell')">Karussell</button>
       <button class="btn ghost" data-art="heute" title="schnittfertig — Untertitel drauf und sofort raus" onclick="uplArtWahl('heute')">⚡ Story HEUTE — sofort posten</button></div>
     <label class="meta"><b>Video</b></label>
-    <div class="row" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Video wählen<input type="file" accept="video/*" hidden onchange="uplSetVideo(this)"></label><span id="uplV" class="meta">–</span></div>
+    <div class="row" id="uplVideoZeile" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Video wählen<input type="file" accept="video/*" hidden onchange="uplSetVideo(this)"></label><span id="uplV" class="meta">–</span></div>
+    <div class="row" id="uplKarussellZeile" hidden style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Slides wählen<input type="file" accept="image/*" multiple hidden onchange="uplSetZusatz(this)"></label><span class="meta">in der richtigen Reihenfolge</span></div>
     <div class="row" style="gap:10px;align-items:center;margin-top:8px"><input id="uplIcloud" type="text" placeholder="iCloud-Link" style="flex:1;min-width:200px;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:10px"><button class="btn ghost" onclick="uplIcloudHolen()">Holen</button></div>
     <div id="uplCutter">
       <label class="meta" style="display:block;margin-top:12px"><b>Zusatzmaterial</b></label>
       <div class="row" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Dateien wählen<input type="file" accept="image/*,.pdf" multiple hidden onchange="uplSetZusatz(this)"></label><span id="uplZ" class="meta">–</span></div>
-      <label class="meta" style="display:block;margin-top:12px"><b>Notizen für den Cutter</b></label>
+      <label class="meta" style="display:block;margin-top:12px"><b id="uplNotizLabel">Notizen für den Cutter</b></label>
       <textarea id="uplNotiz" style="width:100%;min-height:80px;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px" placeholder="z. B. Bild bei 0:03 einblenden"></textarea>
     </div>
     <div class="row" style="margin-top:12px;align-items:center"><button class="btn" id="uplGo" onclick="uplSenden('${key||''}')" disabled>Hochladen</button><span id="uplStatus" class="meta"></span></div></div>`;
@@ -187,13 +190,20 @@ function uplIcloudHolen(){const i=document.getElementById('uplIcloud'),st=docume
   const n=UPL.art==='reel'?((document.getElementById('uplNotiz')||{}).value||''):'';const args=['icloud',l,'--art',UPL.art];if(n)args.push('--notizen',n);
   i.value='';if(st)st.textContent='Hole aus iCloud …';job(args,'iCloud-Link holen')}
 function uplArtWahl(a){UPL.art=a;
+  const vz=document.getElementById('uplVideoZeile'); if(vz) vz.hidden=(a==='karussell');
+  const kz=document.getElementById('uplKarussellZeile'); if(kz) kz.hidden=(a!=='karussell');
+  const nl=document.getElementById('uplNotizLabel'); if(nl) nl.textContent=(a==='karussell'?'Caption':'Notizen für den Cutter');
+  const go=document.getElementById('uplGo'); if(go) go.disabled=(a==='karussell'? !(UPL.zusatz||[]).length : !UPL.video);
   const c=document.getElementById('uplCutter'); if(c){c.hidden=(a==='heute'); if(a==='heute'){UPL.zusatz=[];const z=document.getElementById('uplZ');if(z)z.textContent='–';const n=document.getElementById('uplNotiz');if(n)n.value=''}}
   document.querySelectorAll('#uplArt button').forEach(b=>{b.className='btn'+(b.dataset.art===a?'':' ghost');if(a==='heute'&&b.dataset.art==='heute'){b.style.background='var(--yellow)';b.style.color='var(--navy)'}else{b.style.background='';b.style.color=''}})}
 function uplSetVideo(inp){UPL.video=inp.files[0]||null;document.getElementById('uplV').textContent=UPL.video?UPL.video.name+' · '+Math.round(UPL.video.size/1e6)+' MB':'–';document.getElementById('uplGo').disabled=!UPL.video}
-function uplSetZusatz(inp){UPL.zusatz=[...inp.files];document.getElementById('uplZ').textContent=UPL.zusatz.length?UPL.zusatz.map(f=>f.name).join(', '):'–'}
+function uplSetZusatz(inp){UPL.zusatz=[...inp.files];const z=document.getElementById('uplZ');if(z)z.textContent=UPL.zusatz.length?UPL.zusatz.map(f=>f.name).join(', '):'–';
+  if(UPL.art==='karussell'){const go=document.getElementById('uplGo');if(go)go.disabled=!UPL.zusatz.length;const st=document.getElementById('uplStatus');if(st)st.textContent=UPL.zusatz.length+' Slides'}}
 function uplPut(url,file,onp){return new Promise((res,rej)=>{const x=new XMLHttpRequest();x.open('POST',url);x.upload.onprogress=e=>onp&&onp(e.loaded/e.total);x.onload=()=>x.status<300?res(JSON.parse(x.responseText)):rej(new Error(x.responseText||x.status));x.onerror=()=>rej(new Error('Netzwerkfehler'));x.send(file)})}
 async function uplSenden(key){
-  const st=document.getElementById('uplStatus'), go=document.getElementById('uplGo'); if(!UPL.video)return; go.disabled=true; const q=key?'?key='+encodeURIComponent(key):'';
+  const st=document.getElementById('uplStatus'), go=document.getElementById('uplGo');
+  if(UPL.art==='karussell'){return uplKarussellSenden(key)}
+  if(!UPL.video)return; go.disabled=true; const q=key?'?key='+encodeURIComponent(key):'';
   try{
     st.textContent='Paket anlegen …';
     const meta=await fetch('/api/upload-paket'+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:UPL.video.name,art:UPL.art,notizen:UPL.art!=='heute'?(document.getElementById('uplNotiz')||{}).value||'':'',zusatz:UPL.art!=='heute'?UPL.zusatz.map(f=>f.name):[]})}).then(r=>r.json());
@@ -208,6 +218,21 @@ async function uplSenden(key){
   }catch(e){st.textContent='Fehler: '+e.message; go.disabled=false}
 }
 
+async function uplKarussellSenden(key){
+  const st=document.getElementById('uplStatus'), go=document.getElementById('uplGo');
+  if(!UPL.zusatz.length)return toast('Bitte Slides wählen'); go.disabled=true; const q=key?'?key='+encodeURIComponent(key):'';
+  try{
+    const titel=prompt('Name des Karussells','karussell-'+new Date().toISOString().slice(0,10))||('karussell-'+Date.now());
+    const meta=await fetch('/api/upload-paket'+q,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:titel,art:'karussell',notizen:(document.getElementById('uplNotiz')||{}).value||'',zusatz:UPL.zusatz.map(f=>f.name)})}).then(r=>r.json());
+    if(!meta.ok)throw new Error(meta.error||'Paket');
+    let i=0; for(const f of UPL.zusatz){i++; st.textContent='Slide '+i+' von '+UPL.zusatz.length;
+      await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=zusatz&name=${encodeURIComponent(String(i).padStart(2,'0')+'-'+f.name)}`,f)}
+    const fin=await fetch(`/api/upload-paket/fertig${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}`,{method:'POST'}).then(r=>r.json());
+    st.textContent='✓ '+(fin.slides||UPL.zusatz.length)+' Slides übernommen';
+    UPL.zusatz=[]; toast('Karussell liegt zur Prüfung'); if(typeof load==='function') load();
+  }catch(e){st.textContent='Fehler: '+e.message; go.disabled=false}
+}
 async function uploadArt(inp,artFest){
   const f=inp.files[0]; if(!f) return;
   const art=artFest||(document.querySelector('input[name="uplart"]:checked')||{}).value||'reel';
@@ -376,6 +401,36 @@ function vEingang(){
   ${S.jobs.length?`<div class="sec"><h2>Letzte Läufe</h2><table>${S.jobs.map(j=>`<tr><td>${esc(j.start.slice(11,16))}</td><td>tet-reel ${esc(j.cmd)}</td><td><span class="pill ${j.status==='fehler'?'fehler':j.status==='fertig'?'ok':''}">${esc(j.status)}</span></td></tr>`).join('')}</table></div>`:''}`;
 }
 function srLaden(btn,url){btn.outerHTML=`<video src="${url}" controls autoplay preload="metadata" style="width:100%;max-width:240px;border-radius:10px"></video>`}
+function vKarussell(m){
+  m.innerHTML='<h1>'+esc(cur.name||'')+'</h1><div id="kaBox">lädt …</div>';
+  api('/api/karussell/'+encodeURIComponent(cur.name)).then(d=>{const b=$('#kaBox');if(!b)return;
+    if(d.error){b.innerHTML='<p class="meta">'+esc(d.error)+'</p>';return}
+    KA={name:d.name,reihenfolge:(d.slides||[]).map(x=>x.name)};
+    b.innerHTML=`<div class="row" style="gap:8px;margin-bottom:14px"><span class="pill ${d.phase==='bereit-zum-posten'?'freigegeben':''}">${esc(d.phase)}</span>
+      <span class="meta">${(d.slides||[]).length} Slides</span></div>
+    <div class="grid" id="kaSlides" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">${(d.slides||[]).map((x,i)=>`
+      <div class="card" draggable="true" data-n="${esc(x.name)}" ondragstart="kaZieht(event,'${esc(x.name)}')" ondragover="event.preventDefault()" ondrop="kaDrop(event,'${esc(x.name)}')" style="padding:8px;cursor:grab">
+        <img src="${x.url}" style="width:100%;border-radius:8px;display:block">
+        <div class="row" style="justify-content:space-between;margin-top:6px"><span class="meta">${i+1}</span>
+        <button class="btn ghost" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();kaLoeschen('${esc(x.name)}')">entfernen</button></div>
+      </div>`).join('')}</div>
+    <div class="sec"><h2>Caption</h2><textarea id="kaCaption" style="min-height:160px">${esc(d.caption||'')}</textarea>
+    <div class="row" style="margin-top:10px"><button class="btn" onclick="kaSpeichern()">Caption speichern</button>
+    ${d.phase==='zur-pruefung'?'<button class="btn ghost" onclick="kaFreigeben()">Freigeben</button>':''}
+    <button class="btn ghost" onclick="nav('plan')">Zum Contentplan →</button></div></div>`});
+  return '';
+}
+let KA={name:'',reihenfolge:[]}, KAZIEHT=null;
+function kaZieht(ev,n){KAZIEHT=n}
+function kaDrop(ev,ziel){ev.preventDefault();if(!KAZIEHT||KAZIEHT===ziel)return;
+  const r=KA.reihenfolge.filter(x=>x!==KAZIEHT), i=r.indexOf(ziel);
+  r.splice(i<0?r.length:i,0,KAZIEHT); KAZIEHT=null;
+  post('/api/karussell/'+encodeURIComponent(KA.name),{reihenfolge:r}).then(()=>{toast('Reihenfolge gespeichert');render()})}
+function kaLoeschen(n){if(!confirm('Slide entfernen?'))return;
+  post('/api/karussell/'+encodeURIComponent(KA.name),{loeschen:n}).then(()=>{toast('entfernt');render()})}
+function kaSpeichern(){post('/api/karussell/'+encodeURIComponent(KA.name),{caption:document.getElementById('kaCaption').value}).then(()=>toast('✓ Caption gespeichert'))}
+function kaFreigeben(){post('/api/karussell/'+encodeURIComponent(KA.name),{freigeben:true}).then(()=>{toast('✓ freigegeben — steht im Contentplan');MATERIAL=null;render()})}
+
 function vStoryRoh(m){
   m.innerHTML='<h1>'+esc(cur.name||'')+'</h1><div id="srBox">lädt …</div>';
   api('/api/storyroh/'+encodeURIComponent(cur.name)).then(d=>{const b=$('#srBox');if(!b)return;
@@ -677,9 +732,9 @@ function vPlan(){
       return xs.length?`<div class="matgruppe"><h3>${titel} · ${xs.length}</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${xs.map(x=>`
         <div class="matkarte" draggable="true" ondragstart="planZieht('${esc(x.id)}');event.dataTransfer.setData('text/plain','${esc(x.id)}')" title="In den Kalender ziehen">
           ${vorschau(x)}
-          <div style="min-width:0;flex:1"><b style="display:block;font-size:13px;line-height:1.25">${esc((x.titel||x.id).slice(0,46))}</b>
+          <div style="min-width:0;flex:1"><b style="display:block;font-size:13px;line-height:1.25;cursor:${x.typ==='Karussell'?'pointer':'default'}" ${x.typ==='Karussell'?`onclick="nav('karussell',{name:'${esc(x.titel)}'})"`:''}>${esc((x.titel||x.id).slice(0,46))}</b>
           <span class="meta" style="font-size:11px">${x.alter_tage===0?'heute':x.alter_tage+' Tage alt'}</span>
-          <div style="margin-top:6px"><button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="planEinplanen('${heute}',null,'${esc(x.id)}')">Einplanen</button></div></div>
+          <div class="row" style="margin-top:6px;gap:6px"><button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="planEinplanen('${heute}',null,'${esc(x.id)}')">Einplanen</button>${x.typ==='Karussell'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.titel)}'})">Bearbeiten</button>`:''}</div></div>
         </div>`).join('')}</div></div>`:''}).join('')||'<p class="meta">Nichts Einplanbares gefunden.</p>'};
   setTimeout(()=>window.matRender(),60);
 
