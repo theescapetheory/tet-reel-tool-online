@@ -1984,6 +1984,13 @@ async function rpEinplanen(btn){const tr=btn.closest('tr');const g=k=>(tr.queryS
   job(['einplanen',mat,datum,'--uhrzeit',uhr,'--thema',thema],'Einplanen '+datum+' '+uhr)}
 function planPflege(was){const b=document.getElementById(was==='pp'?'ppBox':'rpBox');if(b)b.hidden=!b.hidden}
 // Reel oder Story auf einen Tag legen — eigener Dialog, kein Browser-Popup
+// Vorschlag beim Einplanen: die naechste Viertelstunde. Feste Slots waren zu starr — Anne 17.09.:
+// „Es ist kurz nach 17 Uhr und ich moechte 17:15 die Story hochladen."
+function naechsteZeit(){
+  const d=new Date(); d.setMinutes(d.getMinutes()+10);
+  d.setMinutes(Math.ceil(d.getMinutes()/15)*15, 0, 0);
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
 async function planEinplanen(datum, zeit, matId){
   datum=datum||fmt(new Date());
   // Anne 17.09.: „wenn ich im contentplan auf eine uhrzeit drücke passiert nichts." Ursache: die
@@ -2002,7 +2009,9 @@ async function planEinplanen(datum, zeit, matId){
   d.innerHTML=`<div class="box"><h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:22px">Einplanen</h2>
     <label>Beitrag</label><select id="pmMat">${m.map(x=>`<option value="${esc(x.id)}"${matId===x.id?' selected':''}>${esc(x.typ||'')} · ${esc(x.titel||x.id)}${x.alter_tage!=null?' · '+(x.alter_tage===0?'heute':x.alter_tage+' Tage alt'):''}</option>`).join('')}</select>
     <label>Tag</label><select id="pmTag">${tage.map(x=>{const k=fmt(x);return `<option value="${k}"${k===datum?' selected':''}>${['So','Mo','Di','Mi','Do','Fr','Sa'][x.getDay()]} ${x.getDate()}.${x.getMonth()+1}.</option>`}).join('')}</select>
-    <label>Uhrzeit</label><select id="pmZeit">${slots.map(x=>`<option${x===(zeit||'11:30')?' selected':''}>${x}</option>`).join('')}</select>
+    <label>Uhrzeit</label>
+    <input id="pmZeit" type="time" list="pmSlots" step="300" value="${esc(zeit||naechsteZeit())}" style="font-variant-numeric:tabular-nums">
+    <datalist id="pmSlots">${slots.map(x=>`<option value="${x}">`).join('')}</datalist>
     <div class="row" style="margin-top:18px;justify-content:flex-end"><button class="btn ghost" onclick="planModalZu()">Abbrechen</button>
     <button class="btn" onclick="planModalOk()">Einplanen</button></div></div>`;
   d.onclick=(e)=>{if(e.target===d)planModalZu()};
@@ -2126,7 +2135,8 @@ function planEintrag(unter){
     <div class="sec"><h2>Termin ändern</h2>
       <div class="row" style="gap:8px;align-items:center">
         <select id="peTag" class="btn ghost" style="padding:7px 10px">${tage.map(t=>`<option value="${t}"${t===a.datum?' selected':''}>${t}</option>`).join('')}</select>
-        <select id="peZeit" class="btn ghost" style="padding:7px 10px">${zeiten.map(z=>`<option value="${z}"${z===a.uhrzeit?' selected':''}>${z}</option>`).join('')}</select>
+        <input id="peZeit" type="time" list="peSlots" step="300" value="${esc(a.uhrzeit||'11:30')}" class="btn ghost" style="padding:7px 10px;font-variant-numeric:tabular-nums">
+        <datalist id="peSlots">${zeiten.map(z=>`<option value="${z}">`).join('')}</datalist>
         <button class="btn" onclick="planVerschieben('${esc(unter)}')">Verschieben</button>
         <button class="btn ghost" onclick="planAbsagen('${esc(unter)}')">Aus dem Plan nehmen</button>
       </div></div></div>`;
