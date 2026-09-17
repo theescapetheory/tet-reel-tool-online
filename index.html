@@ -1207,19 +1207,22 @@ async function uploadFrei(inp){const f=inp.files[0];if(!f)return;toast('Lade fer
 async function upload(inp){const f=inp.files[0];if(!f)return;toast('Lade „'+f.name+'“ hoch … ('+Math.round(f.size/1e6)+' MB)');
  const r=await fetch('/api/upload?name='+encodeURIComponent(f.name),{method:'POST',body:f});const d=await r.json();
  toast(d.ok?'✓ Hochgeladen — liegt im Eingang als „'+d.id+'“':'Fehler beim Upload');load()}
-async function job(args,label){
+// `opts.url`/`opts.body`: manche Auftraege haben einen eigenen Endpunkt (z. B. Story-Anweisungen,
+// die erst den Ordner aufloesen muessen) — die Verfolgung des Auftrags ist danach dieselbe.
+async function job(args,label,opts){
   toast((label||args.join(' '))+(window.HOSTED?' … geht an den Rechner':' … läuft'));
-  const {id,error}=await post('/api/job',{args});
+  const {id,job:jid,error}=opts&&opts.url ? await post(opts.url,opts.body||{}) : await post('/api/job',{args});
   if(error)return toast(error);
+  const auftrag=id||jid;
   const box=$('#joblog');
   const t=setInterval(async()=>{
-    const j=await api('/api/job/'+id);
+    const j=await api('/api/job/'+auftrag);
     if(box){box.textContent=(j.log||'').slice(-6000);box.scrollTop=1e9}
     if(j.status!=='läuft'){
       clearInterval(t);
       await load();
       // Anne 17.09.: nicht nur „fertig" — das Ergebnis muss sichtbar sein und anklickbar bleiben
-      if(!document.getElementById('aufDetail')) auftragOeffnen(id);
+      if(!document.getElementById('aufDetail')) auftragOeffnen(auftrag);
       else toast((label||args[0])+': '+j.status,6000);
     }
   },1500)}
@@ -1628,7 +1631,8 @@ function storyListe(m,art){
               <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
             ${ph==='freigegeben'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>
               <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
-            ${ph==='rohmaterial'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('storyroh',{name:'${esc(x.name)}'})">Ansehen</button>`:''}
+            ${ph==='rohmaterial'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('storyroh',{name:'${esc(x.name)}'})">Ansehen</button>`
+              :`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyAendern('${esc(x.name)}','${esc(x.video||'')}')">Ändern …</button>`}
           </div></div>`).join('')}</div></div>`:''}).join('')
       || `<p class="meta">${art==='roh'
             ? 'Kein offenes Rohmaterial'+(xs.length?' — alles verarbeitet. '+xs.length+' Storys liegen weiter hinten: ':' ')+(xs.length?'<a class="netz" style="cursor:pointer" onclick="nav(\'storyFrei\')">zur Freigabe →</a>':'')
@@ -1687,6 +1691,47 @@ function stFreigeben(name){
   post('/api/story-freigeben',{name}).then(r=>{
     if(r.error)return toast(r.error);
     toast('✓ freigegeben — steht im Contentplan');MATERIAL=null;vStorys($('#main'))})}
+// Aenderungswuensche zu einer Story. Anne 17.09.: „Dafuer kannst du mir gerne hier noch ein Tool
+// einbauen, dass ich da einfach einen Regler habe zum Verschieben. Ansonsten wird in den Storys
+// nichts geschnitten." Genau darum kann dieses Fenster nur: trimmen, Untertitel neu, zurueck an Nico.
+function storyAendern(name, video){
+  const d=document.createElement('div'); d.className='fenster'; d.id='stAnwModal';
+  d.innerHTML=`<div class="box" style="width:min(520px,94vw)">
+    <div class="row" style="justify-content:space-between;align-items:baseline">
+      <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:19px;margin:0">${esc(name)}</h2>
+      <button class="btn ghost" onclick="document.getElementById('stAnwModal').remove()">schließen</button></div>
+    ${video?`<video src="${video}" controls preload="metadata" playsinline style="width:100%;max-width:230px;border-radius:10px;margin:12px auto 0;display:block;background:#000"></video>`:''}
+    <div class="sec"><h2>Vorne / hinten kürzen</h2>
+      <div class="row" style="gap:10px;align-items:center;margin-bottom:8px">
+        <span class="meta" style="width:52px">vorne</span>
+        <input type="range" id="stVorn" min="0" max="10" step="0.5" value="0" oninput="document.getElementById('stVornW').textContent=this.value+' s'" style="flex:1">
+        <span class="meta" id="stVornW" style="width:46px;text-align:right">0 s</span></div>
+      <div class="row" style="gap:10px;align-items:center">
+        <span class="meta" style="width:52px">hinten</span>
+        <input type="range" id="stHinten" min="0" max="10" step="0.5" value="0" oninput="document.getElementById('stHintenW').textContent=this.value+' s'" style="flex:1">
+        <span class="meta" id="stHintenW" style="width:46px;text-align:right">0 s</span></div></div>
+    <div class="sec"><h2>Anweisung</h2>
+      <textarea id="stAnwText" style="min-height:76px" placeholder="Untertitel neu · zurück an Nico"></textarea></div>
+    <div id="stAnwListe" class="meta" style="font-size:11px;white-space:pre-wrap"></div>
+    <div class="row" style="margin-top:14px;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="storyAendernSenden('${esc(name)}')">Ausführen</button></div></div>`;
+  d.onclick=(e)=>{if(e.target===d)d.remove()};
+  document.body.appendChild(d);
+  api('/api/story-anweisungen/'+encodeURIComponent(name)).then(r=>{const b=document.getElementById('stAnwListe');
+    if(!b)return; const xs=(r.anweisungen||[]).slice(-4).reverse();
+    b.innerHTML=xs.map(a=>`${esc(a.zeit||'')} · ${esc(a.text||'')}${a.ergebnis?' → '+esc(a.ergebnis):''}`).join('<br>')});
+}
+function storyAendernSenden(name){
+  const v=parseFloat(document.getElementById('stVorn').value||0), h=parseFloat(document.getElementById('stHinten').value||0);
+  const frei=(document.getElementById('stAnwText').value||'').trim();
+  const teile=[];
+  if(v>0)teile.push('vorne '+v+' s weg');
+  if(h>0)teile.push('hinten '+h+' s weg');
+  if(frei)teile.push(frei);
+  if(!teile.length)return toast('Regler bewegen oder Anweisung schreiben');
+  document.getElementById('stAnwModal').remove();
+  job(['story-anweisung',name],'Story ändern · '+name, {url:'/api/story-anweisung', body:{name, text:teile.join(', ')}});
+}
 function vKarussell(m){
   m.innerHTML='<h1>'+esc(cur.name||'')+'</h1><div id="kaBox">lädt …</div>';
   api('/api/karussell/'+encodeURIComponent(cur.name)).then(d=>{const b=$('#kaBox');if(!b)return;
@@ -1783,11 +1828,12 @@ async function vReel(m){
   const v=d.viralFull; const canPublish=d.qa&&v&&v.ueber_schwelle&&/FREIGABE/.test(d.sicht||'');
   m.innerHTML=`<h1>${esc(d.titel)}</h1>
   <div class="sub">${esc(cur.session)} · ${esc(d.typ||'')} · ${esc(d.variante||'')} · CTA <b>${esc(d.cta||'')}</b> · ${d.spec.frames?Math.round(d.spec.frames/30)+' s · '+d.spec.kamera+' Kamera-Keys · '+d.spec.uebergaenge+' Übergänge · '+d.spec.grafiken.length+' Grafiken':'noch nicht gebaut'}</div>
-  <div class="row" style="margin-bottom:10px">
-    <button class="btn" onclick="job(['dropbox-uebergabe','${esc(dir)}'],'An Nico übergeben')">An Nico übergeben (CapCut)</button>
-    <label class="btn ghost" style="cursor:pointer">Fertige Fassung hochladen<input type=file accept=video/mp4 style=display:none onchange="uploadFrei(this)"></label>
-    <button class="btn ghost" ${canPublish?'':'disabled'} title="${canPublish?'':'braucht QA PASS + Sicht FREIGABE + Viral ≥ Schwelle'}" onclick="job(['publish','${esc(dir)}'],'Freigeben + ablegen')">Freigeben</button>
-    <button class="btn ghost" onclick="reelTechnik()">Technik …</button></div>
+  <div class="row" style="margin-bottom:10px;align-items:center">
+    <button class="btn btn-primary" onclick="capcutOeffnen('${esc(dir)}','${esc(cur.slug)}')">▶ In CapCut bearbeiten</button>
+    <button class="btn" onclick="job(['publish','${esc(dir)}'],'Freigeben')" title="Vorschnitt so freigeben, wie er ist">Freigeben</button>
+    <label class="btn btn-ghost" style="cursor:pointer" title="Ein außerhalb geschnittenes Video hochladen — es ersetzt den Vorschnitt">Fertige Fassung hochladen<input type=file accept=video/mp4 style=display:none onchange="uploadFrei(this)"></label>
+    <button class="btn btn-ghost" onclick="reelTechnik()" title="Technische Werte und Einzelschritte">Technik …</button>
+    ${canPublish?'':`<span class="meta" style="font-size:11px">Prüfung noch offen — Freigeben geht trotzdem</span>`}</div>
   <div class="row" id="reelTechnik" hidden style="margin-bottom:18px;padding:12px;background:var(--navy3);border-radius:var(--rand)">
     <button class="btn ghost" onclick="job(['run','${esc(dir)}'],'Reel bauen')">Neu bauen</button>
     <button class="btn ghost" onclick="job(['run','${esc(dir)}','--force'],'Reel ganz neu bauen')">Alles verwerfen und bauen</button>
@@ -1801,7 +1847,7 @@ async function vReel(m){
     <button class="btn ghost" onclick="job(['capcut-paket','${esc(dir)}'],'CapCut-Paket bauen')">CapCut-Paket bauen</button>
     ${window.HOSTED?'':`<a class="btn ghost" style="text-decoration:none" href="${base}/capcut-draft-paket.zip" download>Paket laden</a>`}</div>
   <div class="two"><div>
-    ${d.dateien.video?`<video controls preload="metadata" src="${(window.HOSTED&&d.videoKlein)?d.videoKlein:base+'/render/reel.mp4?'+d.mtime}"></video>`:''}
+    ${d.dateien.video?`<video controls preload="metadata" src="${d.videoKlein||(base+'/render/reel.mp4?'+d.mtime)}"></video>`:''}
     <div class="sec"><h2>Schnitt · Etappe 1</h2><div id="schnitt" class="meta">lädt …</div></div>
     ${v?`<div class="sec"><h2>Viral-Check</h2><div class="score"><div class="ring" style="--v:${v.score}"><span>${v.score}</span></div><div><b>${v.ueber_schwelle?'über':'unter'} Schwelle ${v.schwelle}</b><br><small class="hint">Heuristik ${v.teile?.heuristik??'–'} · Jury ${v.teile?.jury??'–'} · Korridor Median ${v.teile?.korridor?.konto_median_plays??'–'} Plays</small></div></div>
       ${(v.gruende||[]).length?'<ul style="margin:10px 0 0 18px;font-size:14px">'+v.gruende.map(g=>'<li>'+esc(g)+'</li>').join('')+'</ul>':''}
