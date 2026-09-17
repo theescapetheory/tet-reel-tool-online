@@ -249,7 +249,14 @@ function uplFormular(ziel, key){
       <button class="btn ghost" data-art="heute" title="schnittfertig — Untertitel drauf und sofort raus" onclick="uplArtWahl('heute')">⚡ Story HEUTE — sofort posten</button></div>
     <label class="meta"><b>Video</b></label>
     <div class="row" id="uplVideoZeile" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Video wählen<input type="file" accept="video/*" hidden onchange="uplSetVideo(this)"></label><span id="uplV" class="meta">–</span></div>
-    <div class="row" id="uplKarussellZeile" hidden style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Slides wählen<input type="file" accept="image/*" multiple hidden onchange="uplSetZusatz(this)"></label><span class="meta">in der richtigen Reihenfolge</span></div>
+    <div id="uplKarussellZeile" hidden>
+      <div class="row" id="uplKarArt" style="gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <button class="btn" data-kar="fertig" onclick="uplKarArt('fertig')">Fertige Slides</button>
+        <button class="btn ghost" data-kar="material" onclick="uplKarArt('material')">Rohmaterial + Anweisungen</button>
+        <button class="btn ghost" data-kar="anweisung" onclick="uplKarArt('anweisung')">Nur Anweisungen</button>
+      </div>
+      <div class="row" id="uplKarDateien" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer"><span id="uplKarLabel">Slides wählen</span><input id="uplKarInput" type="file" accept="image/*" multiple hidden onchange="uplSetZusatz(this)"></label><span id="uplKarHint" class="meta">in der richtigen Reihenfolge</span></div>
+    </div>
     <div class="row" style="gap:10px;align-items:center;margin-top:8px"><input id="uplIcloud" type="text" placeholder="iCloud-Link" style="flex:1;min-width:200px;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:10px"><button class="btn ghost" onclick="uplIcloudHolen()">Holen</button></div>
     <div id="uplCutter">
       <label class="meta" style="display:block;margin-top:12px"><b>Zusatzmaterial</b></label>
@@ -267,13 +274,29 @@ function uplIcloudHolen(){const i=document.getElementById('uplIcloud'),st=docume
 function uplArtWahl(a){UPL.art=a;
   const vz=document.getElementById('uplVideoZeile'); if(vz) vz.hidden=(a==='karussell');
   const kz=document.getElementById('uplKarussellZeile'); if(kz) kz.hidden=(a!=='karussell');
-  const nl=document.getElementById('uplNotizLabel'); if(nl) nl.textContent=(a==='karussell'?'Caption':'Notizen für den Cutter');
-  const go=document.getElementById('uplGo'); if(go) go.disabled=(a==='karussell'? !(UPL.zusatz||[]).length : !UPL.video);
+  const nl=document.getElementById('uplNotizLabel'); if(nl) nl.textContent=(a==='karussell'?'Notizen für Nico':'Notizen für den Cutter');
+  const nt=document.getElementById('uplNotiz'); if(nt) nt.placeholder=(a==='karussell'?'Worum geht es, welche Aussage pro Seite, welcher CTA — die Caption schreibe ich am Ende':'z. B. Bild bei 0:03 einblenden');
+  if(a==='karussell'&&!UPL.karArt) uplKarArt('fertig');
+  uplKarPruefen();
   const c=document.getElementById('uplCutter'); if(c){c.hidden=(a==='heute'); if(a==='heute'){UPL.zusatz=[];const z=document.getElementById('uplZ');if(z)z.textContent='–';const n=document.getElementById('uplNotiz');if(n)n.value=''}}
   document.querySelectorAll('#uplArt button').forEach(b=>{b.className='btn'+(b.dataset.art===a?'':' ghost');if(a==='heute'&&b.dataset.art==='heute'){b.style.background='var(--yellow)';b.style.color='var(--navy)'}else{b.style.background='';b.style.color=''}})}
 function uplSetVideo(inp){UPL.video=inp.files[0]||null;document.getElementById('uplV').textContent=UPL.video?UPL.video.name+' · '+Math.round(UPL.video.size/1e6)+' MB':'–';document.getElementById('uplGo').disabled=!UPL.video}
 function uplSetZusatz(inp){UPL.zusatz=[...inp.files];const z=document.getElementById('uplZ');if(z)z.textContent=UPL.zusatz.length?UPL.zusatz.map(f=>f.name).join(', '):'–';
-  if(UPL.art==='karussell'){const go=document.getElementById('uplGo');if(go)go.disabled=!UPL.zusatz.length;const st=document.getElementById('uplStatus');if(st)st.textContent=UPL.zusatz.length+' Slides'}}
+  if(UPL.art==='karussell'){uplKarPruefen();const st=document.getElementById('uplStatus');if(st)st.textContent=UPL.zusatz.length+(UPL.karArt==='fertig'?' Slides':' Dateien')}}
+// Karussell: drei Wege in den Eingang (Anne 17.09.) — fertige Seiten, Rohmaterial mit Anweisungen, oder nur Anweisungen
+function uplKarArt(k){UPL.karArt=k;
+  const l=document.getElementById('uplKarLabel'), h=document.getElementById('uplKarHint'), d=document.getElementById('uplKarDateien'), i=document.getElementById('uplKarInput');
+  if(l&&h&&d&&i){
+    d.hidden=(k==='anweisung');
+    if(k==='fertig'){l.textContent='Slides wählen';h.textContent='in der richtigen Reihenfolge';i.accept='image/*'}
+    else if(k==='material'){l.textContent='Material wählen';h.textContent='Video, Fotos, PDF — Nico baut die Seiten daraus';i.accept='image/*,video/*,.pdf'}
+  }
+  document.querySelectorAll('#uplKarArt button').forEach(b=>b.className='btn'+(b.dataset.kar===k?'':' ghost'));
+  uplKarPruefen()}
+function uplKarPruefen(){const go=document.getElementById('uplGo'); if(!go)return;
+  if(UPL.art!=='karussell'){go.disabled=!UPL.video;return}
+  const notiz=((document.getElementById('uplNotiz')||{}).value||'').trim();
+  go.disabled = UPL.karArt==='anweisung' ? !notiz : !(UPL.zusatz||[]).length;}
 function uplPut(url,file,onp){return new Promise((res,rej)=>{const x=new XMLHttpRequest();x.open('POST',url);x.upload.onprogress=e=>onp&&onp(e.loaded/e.total);x.onload=()=>x.status<300?res(JSON.parse(x.responseText)):rej(new Error(x.responseText||x.status));x.onerror=()=>rej(new Error('Netzwerkfehler'));x.send(file)})}
 async function uplSenden(key){
   const st=document.getElementById('uplStatus'), go=document.getElementById('uplGo');
@@ -295,11 +318,14 @@ async function uplSenden(key){
 
 async function uplKarussellSenden(key){
   const st=document.getElementById('uplStatus'), go=document.getElementById('uplGo');
-  if(!UPL.zusatz.length)return toast('Bitte Slides wählen'); go.disabled=true; const q=key?'?key='+encodeURIComponent(key):'';
+  const notiz=((document.getElementById('uplNotiz')||{}).value||'').trim();
+  if(UPL.karArt!=='anweisung'&&!UPL.zusatz.length)return toast('Bitte Dateien wählen');
+  if(UPL.karArt==='anweisung'&&!notiz)return toast('Bitte Anweisungen eintragen');
+  go.disabled=true; const q=key?'?key='+encodeURIComponent(key):'';
   try{
     const titel=prompt('Name des Karussells','karussell-'+new Date().toISOString().slice(0,10))||('karussell-'+Date.now());
     const meta=await fetch('/api/upload-paket'+q,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name:titel,art:'karussell',notizen:(document.getElementById('uplNotiz')||{}).value||'',zusatz:UPL.zusatz.map(f=>f.name)})}).then(r=>r.json());
+      body:JSON.stringify({name:titel,art:'karussell',karussell_art:UPL.karArt||'fertig',notizen:notiz,zusatz:UPL.zusatz.map(f=>f.name)})}).then(r=>r.json());
     if(!meta.ok)throw new Error(meta.error||'Paket');
     let i=0; for(const f of UPL.zusatz){i++; st.textContent='Slide '+i+' von '+UPL.zusatz.length;
       await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=zusatz&name=${encodeURIComponent(String(i).padStart(2,'0')+'-'+f.name)}`,f)}
@@ -373,6 +399,15 @@ function vUeber(m){
       </div>
     </div>
 
+    ${(d.storyFreigabe||[]).length?`<div class="sec"><h2>Storys zur Freigabe <span class="pill">${d.storyFreigabe.length}</span></h2>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${d.storyFreigabe.map(x=>`
+        <div class="card"><b style="font-size:13px">${esc(x.name)}</b>
+          <video src="${x.video}" controls preload="metadata" playsinline style="width:100%;max-width:200px;border-radius:10px;margin:8px 0;background:#000"></video>
+          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:70px;overflow:auto">${esc(x.notizen.slice(0,240))}</div>`:''}
+          <div class="row" style="gap:6px;margin-top:8px">
+            <button class="btn" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>
+            <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>
+          </div></div>`).join('')}</div></div>`:''}
     <div class="sec"><h2>Rohmaterial für Stories ${sr.gesamt?`<span class="pill">${sr.gesamt}</span>`:''}</h2>
       <div class="card">
         ${storyZeilen?`<table><tr><th>Material</th><th>Zuletzt</th></tr>${storyZeilen}</table>`
@@ -512,9 +547,12 @@ function vStoryRoh(m){
     if(d.error){b.innerHTML='<p class="meta">'+esc(d.error)+'</p>';return}
     b.innerHTML=`<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px"><span class="pill">${esc(d.quelle)}</span><span class="pill">${d.dateien.length} Datei(en)</span>${d.dropbox?`<a class="btn ghost" target="_blank" rel="noopener" href="${d.dropbox}">Dropbox-Ordner ↗</a>`:''}</div>
     <div class="grid">${d.dateien.map(f=>`<div class="card"><b>${esc(f.name)}</b><div class="meta">${Math.round(f.groesse/1e6)} MB · ${esc(f.mtime)}</div>
-      <div class="srV" style="margin:8px 0">${f.vorschau?`<video src="${f.vorschau}" controls preload="metadata" style="width:100%;max-width:240px;border-radius:10px"></video>`:`<button class="btn ghost" onclick="job(['story-vorschau','${esc(d.pfad).replace(/'/g,"\\'")}','--name','${esc(d.name).replace(/'/g,"\\'")}'],'Vorschau erzeugen')">Vorschau erzeugen</button>`}</div>
+      <div class="srV" style="margin:8px 0">${f.vorschau?`<video src="${f.vorschau}" controls preload="metadata" style="width:100%;max-width:240px;border-radius:10px"></video>`:`<div class="meta" style="font-size:12px">Vorschau wird gerade erzeugt …</div>`}</div>
       <div class="row" style="gap:8px"><button class="btn" onclick="job(['story-heute','${esc(f.pfad).replace(/'/g,"\\'")}'],'Untertitel + sofort posten')">⚡ Untertitel + sofort posten</button></div></div>`).join('')}</div>
-    <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>`});
+    <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>`;
+    // Vorschau wird gerade gebaut -> in Ruhe nachladen, bis sie da ist
+    if(d.vorschauLaeuft && view==='storyroh'){clearTimeout(window._srT);window._srT=setTimeout(()=>{if(view==='storyroh')vStoryRoh(m)},6000)}
+  });
   return '';
 }
 function vSession(){
@@ -834,6 +872,12 @@ function rpAendernOk(datum, material){
   document.getElementById('rpModal').remove();
   const plan=(S.redaktionsplan||[]).map(x=>(x.datum===datum&&(x.material||'')===material)?{...x,datum:t,uhrzeit:z}:x);
   post('/api/redaktionsplan',{plan}).then(()=>{toast('verschoben auf '+t+' '+z);load()});
+}
+// Story doch noch schneiden lassen (Anne 17.09.: „ich habe die Moeglichkeit, es zurueck an Nico zu geben")
+function storyZurueck(name){
+  const grund=prompt('Was soll Nico an „'+name+'" noch machen?','');
+  if(grund===null)return;
+  job(['story-zurueck',name,'--grund',grund],'Zurück an Nico: '+name);
 }
 // Ein eingeplanter Beitrag: ansehen, verschieben, absagen (Anne 17.09.)
 const SLOTS=['08:00','11:30','14:00','17:00','20:00'];
