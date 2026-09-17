@@ -61,6 +61,16 @@ h1 em{font-style:italic;font-weight:400;color:var(--camel)}
 @media(max-width:760px){header{flex-wrap:wrap;gap:8px;padding:12px 14px}nav{margin-left:0;flex-wrap:wrap;gap:2px}nav button{font-size:11px;padding:7px 9px}main{padding:14px 12px}.grid{grid-template-columns:1fr}.row{flex-wrap:wrap}h1{font-size:22px}table{font-size:12px}.kal{grid-template-columns:repeat(7,minmax(150px,1fr));overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch}}
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:12px 0}.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}.kpi b{display:block;font-size:26px;line-height:1.1}.kpi span{color:var(--grey);font-size:12px}
 .kpi input{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;margin-top:6px}
+.kpikarten{display:grid;grid-template-columns:1fr;gap:14px;margin-top:12px}
+@media(min-width:760px){.kpikarten{grid-template-columns:1fr 1fr}}
+.kpikarte{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--camelbg);border-radius:var(--rand);padding:18px 20px;box-shadow:0 1px 2px rgba(22,35,58,.04)}
+.kpikarte .nr{display:block;color:var(--grey);font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase}
+.kpikarte b{display:block;font-size:40px;line-height:1.05;margin:6px 0 2px;letter-spacing:-.02em}
+.kpikarte .unter{display:block;color:var(--grey);font-size:13px;font-weight:600}
+.kpikarte .kpitext{margin:10px 0 0;font-size:13px;color:var(--grey);line-height:1.45}
+.balken{height:6px;border-radius:99px;background:var(--navy3);margin:12px 0 6px;overflow:hidden}
+.balken i{display:block;height:100%;border-radius:99px}
+.zielzeile{display:flex;justify-content:space-between;font-size:11px;color:var(--grey)}
 .zuord{background:#fdf8e8;border:1px solid #f0e4bd;border-left:3px solid var(--camelbg);border-radius:10px;padding:9px 13px;font-size:13px;margin-top:6px}
 video{width:100%;max-width:420px;border-radius:18px;background:#000;border:1px solid var(--line)}
 img.kb{width:100%;border-radius:14px;border:1px solid var(--line)}
@@ -1205,13 +1215,41 @@ async function vKpi(m){
   const kw='KW'+kwOf(new Date()); const mw=(d.meeting||{})[kw]||{};
   // Anne 16.09.: „auf der KPI seite erwarte ich unsere Übersicht, die ich jeden Dienstag nutzen kann"
   // -> der echte Dienstags-Report, so wie er im Meeting läuft
-  const berichtHtml=d.bericht?`<div class="sec" style="border:0;padding:0;margin-bottom:22px">
-    <div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Dienstags-Report · Stand ${esc(d.bericht.stand||'')}</h2>
-    <a class="btn ghost" style="text-decoration:none" href="${d.bericht.url}" target="_blank">in neuem Fenster öffnen</a></div>
-    <iframe src="${d.bericht.url}" style="width:100%;height:1600px;border:1px solid var(--line);border-radius:var(--rand);background:#fff;margin-top:10px"></iframe></div>`:''
   const fol=last.instagram?.followers, folPrev=prev.instagram?.followers;
   const week=posts.filter(p=>Date.now()-new Date(p.timestamp).getTime()<7*864e5);
   const sum=(arr,k)=>arr.reduce((a,p)=>a+(+p[k]||0),0);
+  // Anne 17.09.: „farblich die KPI-Übersicht auf escape-cut anpassen, das sieht aus wie eine
+  // eingepackte PDF." -> die vier Dienstags-Kennzahlen werden hier selbst gezeichnet, im Ton des
+  // Tools; der vollständige Report bleibt als Link.
+  const monat=new Date().toISOString().slice(0,7);
+  const monatsPosts=posts.filter(p=>(p.timestamp||'').startsWith(monat));
+  const monatsAnfang=(()=>{const vor=snaps.filter(x=>String(x.date||'')<monat+'-01');return vor.length?vor[vor.length-1]?.instagram?.followers:null})();
+  const ziel=(wert,z)=>Math.max(0,Math.min(100,Math.round(100*(wert||0)/z)));
+  const balken=(pz,farbe)=>`<div class="balken"><i style="width:${pz}%;background:${farbe}"></i></div>`;
+  const gross=(nr,titel,wert,unter,pz,zieltext,farbe,text)=>`
+    <div class="kpikarte" style="border-left-color:${farbe}">
+      <span class="nr">${nr} · ${titel}</span>
+      <b>${wert}</b>
+      <span class="unter">${unter}</span>
+      ${pz!=null?balken(pz,farbe)+`<div class="zielzeile"><span>${zieltext}</span><span>${pz} %</span></div>`:''}
+      ${text?`<p class="kpitext">${text}</p>`:''}
+    </div>`;
+  const berichtHtml=`<div class="sec" style="border:0;padding:0;margin-bottom:6px">
+    <div class="row" style="justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px">
+      <h2 style="margin:0">Dienstags-Report${d.taeglich?.stand?` · Stand ${esc(String(d.taeglich.stand).replace('T',' ').slice(0,16))}`:''}</h2>
+      ${d.bericht?`<a class="btn ghost" style="text-decoration:none" href="${d.bericht.url}" target="_blank">ganzen Report öffnen ↗</a>`:''}
+    </div>
+    <div class="kpikarten">
+      ${gross(1,'Followerwachstum',f(fol),
+        monatsAnfang!=null&&fol!=null?`${fol-monatsAnfang>=0?'▲ +':'▼ '}${f(fol-monatsAnfang)} im ${new Date().toLocaleDateString('de-DE',{month:'long'})}`:'',
+        ziel(fol,10000),'Ziel 10.000','var(--camelbg)','')}
+      ${gross(2,'Beiträge im Monat',f(monatsPosts.length),'Feed-Beiträge · Ziel 90',
+        ziel(monatsPosts.length,90),'Ziel 90 / Monat','var(--yellow)','')}
+      ${gross(3,'Leads aus Organic',f(mw.leads??0),'trägst du dienstags ein',null,null,'var(--yellow)','')}
+      ${gross(4,'Kontakte in den Circle',f(mw.circle??0),mw.manychat?`davon ${f(mw.manychat)} über ManyChat`:'trägst du dienstags ein',null,null,'var(--camelbg)','')}
+    </div>
+    ${mw.notiz?`<div class="zuord" style="margin-top:12px">${esc(mw.notiz)}</div>`:''}
+  </div>`
   m.innerHTML=`<h1>KPI</h1>${berichtHtml}
   
   <div class="kpi-grid">
