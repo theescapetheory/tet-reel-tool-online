@@ -507,37 +507,12 @@ function vUeber(m){
     </div></div>`:''}
 
 
-    <div class="sec"><h2>Stories heute — sofort raus ${hu.length?`<span class="pill neu">${hu.length}</span>`:''}</h2>
-      <div class="card">
-        ${heuteKarten?`<div class="grid">${heuteKarten}</div>
-          <p class="sub" style="margin-top:10px">Fertige Stories stehen in der Warteschlange für heute
-          (<code>~/tet-reel-work/stories-heute/${esc(d.datum)}/auftrag.json</code>). Das Einstellen bei Metricool
-          macht die Posting-Routine — das Cockpit selbst postet nichts.</p>`
-        :''}
-      </div>
-    </div>
-
-    <div class="sec"><h2>Geplanter Story-Arc</h2>
-      <div class="card">
-        ${arc?`<div class="row" style="justify-content:space-between;align-items:center">
-            <div><b>${esc(arc.name)}</b><div class="meta">${istHeute?'für heute':'kein Arc für heute — das ist der letzte'} · ${esc(arc.phase)}</div></div>
-            <span class="pill ${arc.phase==='zur Prüfung'?'neu':'ok'}">${esc(arc.phase)}</span>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:14px">${kacheln}</div>
-          <div class="row" style="margin-top:14px">
-            ${arc.ordner==='zur-pruefung'?`<button class="btn" onclick="storyFreigeben('${esc(arc.name)}')">Alle ${arc.bilder.length} freigeben →</button>`
-              :'<span class="meta">Schon freigegeben — die Routine plant die Slots ein.</span>'}
-          </div>`
-        :''}
-      </div>
-    </div>
-
-    ${d.cover.length?`<div class="sec"><h2>Zuletzt gebaute Post-Cover</h2><div class="card">
-      <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:8px">
-      ${d.cover.map(c=>`<a href="${c.post}" target="_blank" title="${esc(c.slug)} — Post öffnen">
-        <img src="${c.url}" style="width:100%;border-radius:8px;border:1px solid var(--line);display:block"></a>`).join('')}
-      </div></div></div>`:''}
-    `;
+    <div class="sec"><h2>Storys</h2><div class="card">
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <button class="btn ghost" onclick="nav('storyFrei')">Zur Freigabe →</button>
+        <button class="btn ghost" onclick="nav('storyRoh')">Rohmaterial →</button>
+        <button class="btn ghost" onclick="nav('upload')">Story hochladen →</button>
+      </div></div></div>`;
   });
 }
 
@@ -866,6 +841,15 @@ async function vReel(m){
     ${d.kpiFull?`<div class="sec"><h2>KPI nach dem Posten</h2><table><tr><th>Plays</th><th>Likes</th><th>Kommentare</th><th>Saves</th><th>Prognose</th></tr><tr><td>${d.kpiFull.plays??'–'}</td><td>${d.kpiFull.likes??'–'}</td><td>${d.kpiFull.kommentare??'–'}</td><td>${d.kpiFull.saves??'–'}</td><td>${v?v.score:'–'}</td></tr></table></div>`:''}
   </div><div>
     ${d.dateien.kontaktbogen?`<img class="kb" src="${base}/qa/kontaktbogen.jpg?${d.mtime}" alt="Kontaktbogen">`:''}
+    <div class="sec"><h2>Änderung anweisen</h2><div class="card">
+      <textarea id="anwText" style="min-height:90px" placeholder="z. B. Untertitel passen nicht · CTA-Banner am Ende weg · Anfang verhaspelt, sauber schneiden"></textarea>
+      <div class="row" style="margin-top:10px;gap:8px;align-items:center">
+        <button class="btn" onclick="anweisungSenden('${esc(dir)}')">Anweisung ausführen</button>
+        <span class="meta" id="anwStatus"></span>
+      </div>
+      <div id="anwListe" style="margin-top:12px"></div>
+      ${(()=>{setTimeout(()=>anweisungenLaden('${esc(dir)}'),200);return ''})()}
+    </div></div>
     ${d.dateien.sfx?`<img class="kb" style="margin-top:10px" src="${base}/qa/sfx.png?${d.mtime}" alt="SFX-Kurve">`:''}
     <div class="sec"><h2>Captions bearbeiten</h2><div id="capedit" class="meta">lädt …</div></div>
     <div class="sec"><h2>Redaktion (reel.json)</h2><textarea id="reeljson">${esc(JSON.stringify(d.reel,null,1))}</textarea>
@@ -1111,6 +1095,30 @@ function storyZurueck(name){
   const grund=prompt('Was soll Nico an „'+name+'" noch machen?','');
   if(grund===null)return;
   job(['story-zurueck',name,'--grund',grund],'Zurück an Nico: '+name);
+}
+// Nico schreibt einen Änderungswunsch unter das Reel, Claude setzt ihn um (Anne 17.09.)
+async function anweisungSenden(dir){
+  const t=document.getElementById('anwText'), st=document.getElementById('anwStatus');
+  const text=(t.value||'').trim(); if(!text)return toast('Bitte die Änderung beschreiben');
+  st.textContent='geht an den Rechner …';
+  const r=await post('/api/anweisung',{reel:dir,text,von:'Nico'});
+  if(r.error){st.textContent=r.error;return}
+  t.value=''; st.textContent='läuft — das Reel wird neu gebaut';
+  anweisungenLaden(dir);
+  if(r.job){const p=setInterval(async()=>{const j=await api('/api/job/'+r.job);
+    if(j.status&&j.status!=='läuft'){clearInterval(p);st.textContent='fertig';anweisungenLaden(dir);auftragOeffnen(r.job)}},3000)}
+}
+async function anweisungenLaden(dir){
+  const box=document.getElementById('anwListe'); if(!box)return;
+  const d=await api('/api/anweisungen/'+encodeURIComponent(dir));
+  const l=(d.anweisungen||[]).slice().reverse();
+  box.innerHTML=l.length?l.map(a=>`<div class="aufz" style="cursor:default">
+      <span class="dot ${a.status==='erledigt'?'fertig':a.status==='fehler'?'fehler':'laeuft'}"></span>
+      <div style="min-width:0;flex:1"><b>${esc(a.text)}</b>
+      <span class="meta" style="font-size:11px">${esc(a.von||'')} · ${esc(String(a.zeit||'').replace('T',' '))} · ${esc(a.status||'')}</span>
+      ${a.ergebnis?`<div class="erg">${esc(a.ergebnis)}</div>`:''}
+      ${a.von_hand?`<div class="erg" style="color:var(--red)">von Hand: ${esc(a.von_hand)}</div>`:''}</div></div>`).join('')
+    :'<p class="meta" style="margin:0">Noch keine Anweisung.</p>';
 }
 // Ein eingeplanter Beitrag: ansehen, verschieben, absagen (Anne 17.09.)
 const SLOTS=['08:00','11:30','14:00','17:00','20:00'];
