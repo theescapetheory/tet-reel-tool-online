@@ -1306,7 +1306,21 @@ function vLernen(){
   <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre><div id="claudeout" class="sub" style="margin-top:10px;white-space:pre-wrap"></div></div>`;
 }
 fetch('/api/state').then(r=>r.json()).then(s=>{S=s;HOME=(s.sessions[0]?.pfad||'').includes('/Users/')?'/Users/'+(s.sessions[0].pfad.split('/')[2]):'';render()});
-setInterval(load,20000);
+// Anne 17.09.: „kann man das in den Hintergrund verlagern, ohne dass ich es so sehr spüre?"
+// -> Im verborgenen Tab gar nicht abfragen; passiert lange nichts, wird der Takt gestreckt
+//    (20 s -> bis 2 Min.); sobald sich etwas regt oder du zurueckkommst, wieder eng.
+let takt=20000, stiller=0;
+function taktLauf(){
+  if(document.hidden){setTimeout(taktLauf,takt);return}
+  const vorher=S?JSON.stringify(S):null;
+  load().then(()=>{
+    const jetzt=S?JSON.stringify(S):null;
+    if(vorher===jetzt){stiller++; if(stiller>=3)takt=Math.min(120000,takt+20000)}
+    else {stiller=0; takt=20000}
+  }).catch(()=>{}).finally(()=>setTimeout(taktLauf,takt));
+}
+setTimeout(taktLauf,20000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){takt=20000;stiller=0;load()}});
 </script>
 </body>
 </html>
