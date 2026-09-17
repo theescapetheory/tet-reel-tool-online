@@ -210,7 +210,22 @@ async function auftragOeffnen(id){
 }
 function toast(t,ms=4000){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(e._t);e._t=setTimeout(()=>e.hidden=true,ms)}
 function ladder(st){const i=LADDER.indexOf(st);return '<div class="ladder">'+LADDER.map((l,k)=>`<i class="${k<i?'done':k===i?'on':''}" title="${LABEL[l]}"></i>`).join('')+'</div>'}
-async function load(){S=await api('/api/state');auftragKnopfStand();if(window.HOSTED){api('/api/online').then(o=>{const e=$('#onlineStand');if(!e)return;e.hidden=false;e.textContent=o.stand?('Stand '+o.stand.replace('T',' ').slice(0,16)+(o.offen?' · '+o.offen+' offen':'')):'noch kein Sync'})}if(view==='reel'&&document.activeElement&&document.activeElement.tagName==='TEXTAREA')return;if(view!=='reel')render()}
+// Anne 17.09.: „die seiten hüpfen immer wieder nach oben." Ursache war der 20-Sekunden-Takt, der die
+// Seite auch dann neu gezeichnet hat, wenn sich nichts geaendert hatte. Jetzt: nur bei echter
+// Aenderung, nie waehrend einer Eingabe oder bei offenem Fenster — und die Scrollhöhe bleibt stehen.
+async function load(){
+  const vorher = S ? JSON.stringify(S) : null;
+  S = await api('/api/state');
+  auftragKnopfStand();
+  if(window.HOSTED){api('/api/online').then(o=>{const e=$('#onlineStand');if(!e)return;e.hidden=false;
+    e.textContent=o.stand?('Stand '+o.stand.replace('T',' ').slice(0,16)+(o.offen?' · '+o.offen+' offen':'')):'noch kein Sync'})}
+  if(view==='reel')return;
+  if(vorher===JSON.stringify(S))return;                 // nichts Neues -> stehen lassen
+  if(document.querySelector('.modal'))return;           // ein Fenster ist offen
+  const a=document.activeElement;
+  if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;   // es wird gerade getippt
+  render();
+}
 // Gruppenkopf ist nur ein Reiter zum Auf- und Zuklappen, dahinter liegt keine Seite (Anne 17.09.)
 const NAV_GRUPPE={eingang:'reels',vorschnitt:'reels',studio:'reels',schnitt:'reels',session:'reels',reel:'reels',
   karRoh:'kar',karFrei:'kar',karussell:'kar',storyRoh:'story',storyFrei:'story',storyroh:'story'};
@@ -261,6 +276,15 @@ async function claude(stage,params,label){
 }
 
 function render(){
+  // Beim Neuzeichnen die Scrollhöhe halten — auch wenn eine Seite ihren Inhalt erst nachlädt
+  const y=window.scrollY;
+  if(y>4){
+    const halten=()=>{if(window.scrollY<y-2)window.scrollTo(0,y)};
+    requestAnimationFrame(halten); setTimeout(halten,150); setTimeout(halten,700);
+  }
+  return renderRoh();
+}
+function renderRoh(){
   const m=$('#main'); if(!S){m.innerHTML='<p>lädt …</p>';return}
   {let n=0;const t=setInterval(()=>{const b=document.getElementById('uplBox');if(b&&!b.children.length){uplFormular('uplBox','');claudeZugang()}if((b&&b.children.length)||++n>60)clearInterval(t)},100)}  // Übersicht lädt asynchron
   document.body.classList.toggle('schnitt',view==='schnitt');
