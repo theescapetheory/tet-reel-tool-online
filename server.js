@@ -123,6 +123,11 @@ const server = http.createServer(async (req, res) => {
       const direkt = { "/api/state": "state", "/api/uebersicht": "uebersicht", "/api/frei": "frei", "/api/kpi": "kpi",
         "/api/material": "material", "/api/learnings": "learnings", "/api/claude-zugang": "claude_zugang",
         "/api/storys": "storys", "/api/karussells": "karussells" };
+      if (p.startsWith("/api/karussell/")) {        // Detailseite aus dem Schnappschuss
+        const name = decodeURIComponent(p.slice(15));
+        const d = (snapshot.karussell_detail || {})[name];
+        return d ? sendJSON(res, 200, d) : sendJSON(res, 404, { error: "nicht im Spiegel" });
+      }
       if (direkt[p]) {
         const leer = { "/api/material": { material: [] }, "/api/storys": { storys: [] }, "/api/karussells": { karussells: [] } };
         return sendJSON(res, 200, snapshot[direkt[p]] ?? leer[p] ?? {});

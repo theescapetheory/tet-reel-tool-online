@@ -608,14 +608,13 @@ function karListe(m,art){
     if(!d||!Array.isArray(d.karussells)){b.innerHTML='<p class="meta">Konnte nicht laden — versuche es gleich noch einmal …</p>';
       clearTimeout(window._ksT);window._ksT=setTimeout(()=>{if(view==='karRoh'||view==='karFrei')karListe(m,art)},3000);return}
     const ks=d.karussells;
+    // Anne 17.09.: „bei den Karussells sehe ich nach wie vor nichts." Meine erste Aufteilung war
+    // falsch — „Rohmaterial = ohne Seiten" traf auf kein einziges Karussell zu, die Seite war immer leer.
+    // Richtig: Rohmaterial = alles, was hereinkam und noch nicht freigegeben ist. Freigabe = das Freigegebene.
     const gruppen = art==='roh'
-      ? [['eingang','Eingelaufen — Seiten fehlen noch']]
-      : [['pruefung','Zur Freigabe'],['bereit-zum-posten','Freigegeben — im Contentplan'],['gepostet','Gepostet']];
-    const passt=(x,g)=>{
-      if(g==='eingang') return x.phase==='zur-pruefung' && x.slides===0;
-      if(g==='pruefung') return x.phase==='zur-pruefung' && x.slides>0;
-      return x.phase===g;
-    };
+      ? [['zur-pruefung','Eingelaufen — warten auf Freigabe']]
+      : [['bereit-zum-posten','Freigegeben — im Contentplan'],['gepostet','Gepostet']];
+    const passt=(x,g)=>x.phase===g;
     b.innerHTML=gruppen.map(([g,t])=>{const xs=ks.filter(x=>passt(x,g));
       return xs.length?`<div class="sec"><h2>${t} <span class="pill">${xs.length}</span></h2>
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${xs.map(x=>`
@@ -626,12 +625,12 @@ function karListe(m,art){
           ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto;margin-top:6px">${esc(x.notizen.slice(0,200))}</div>`:''}
           <div class="row" style="gap:6px;margin-top:8px">
             <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.name)}'})">Öffnen</button>
-            ${g==='pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="ksFreigeben('${esc(x.name)}')">Freigeben</button>`:''}
+            ${g==='zur-pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="ksFreigeben('${esc(x.name)}')">Freigeben</button>`:''}
             ${g==='bereit-zum-posten'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>`:''}
           </div></div>`).join('')}</div></div>`:''}).join('')
       || `<p class="meta">${art==='roh'
-            ? 'Kein offenes Rohmaterial — alle Karussells haben Seiten'+(ks.length?'. <a class="netz" style="cursor:pointer" onclick="nav(\'karFrei\')">zur Freigabe →</a>':'')
-            : 'Nichts zur Freigabe'+(ks.length?' — '+ks.length+' Karussells liegen in anderen Phasen':'')}</p>`});
+            ? 'Nichts Offenes — alles ist freigegeben. <a class="netz" style="cursor:pointer" onclick="nav(\'karFrei\')">zur Freigabe →</a>'
+            : 'Noch nichts freigegeben. <a class="netz" style="cursor:pointer" onclick="nav(\'karRoh\')">zum Rohmaterial →</a>'}</p>`});
   return '';
 }
 // Storys: Rohmaterial und Freigabe getrennt
