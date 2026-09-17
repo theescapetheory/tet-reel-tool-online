@@ -120,8 +120,13 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" }); return res.end(html);
     }
     if (req.method === "GET") {
-      const direkt = { "/api/state": "state", "/api/uebersicht": "uebersicht", "/api/frei": "frei", "/api/kpi": "kpi", "/api/material": "material", "/api/learnings": "learnings", "/api/claude-zugang": "claude_zugang" };
-      if (direkt[p]) return sendJSON(res, 200, snapshot[direkt[p]] ?? (p === "/api/material" ? { material: [] } : {}));
+      const direkt = { "/api/state": "state", "/api/uebersicht": "uebersicht", "/api/frei": "frei", "/api/kpi": "kpi",
+        "/api/material": "material", "/api/learnings": "learnings", "/api/claude-zugang": "claude_zugang",
+        "/api/storys": "storys", "/api/karussells": "karussells" };
+      if (direkt[p]) {
+        const leer = { "/api/material": { material: [] }, "/api/storys": { storys: [] }, "/api/karussells": { karussells: [] } };
+        return sendJSON(res, 200, snapshot[direkt[p]] ?? leer[p] ?? {});
+      }
       if (p.startsWith("/api/storyroh/")) { const n = decodeURIComponent(p.slice(14)); return sendJSON(res, 200, (snapshot.storyroh || {})[n] || { error: "noch nicht synchronisiert" }); }
       if (p.startsWith("/api/session/")) { const id = decodeURIComponent(p.split("/")[3]); return sendJSON(res, 200, (snapshot.sessions || {})[id] || { id, fehlt: true }); }
       if (p.startsWith("/api/reel/")) { const [, , , sid, slug] = p.split("/").map(decodeURIComponent); return sendJSON(res, 200, (snapshot.reels || {})[sid + "/" + slug] || { fehlt: true }); }
