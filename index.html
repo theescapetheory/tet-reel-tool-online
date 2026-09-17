@@ -584,6 +584,30 @@ textarea.input{ resize:vertical; min-height:84px; line-height:1.55; }
 .modal-x{ position:absolute; top:var(--s4); right:var(--s4); width:34px; height:34px; border:1px solid var(--hair); border-radius:var(--r-sm); background:var(--white); cursor:pointer; color:var(--slate); display:flex; align-items:center; justify-content:center; }
 .modal-x:hover{ background:var(--tint); color:var(--ink); }
 .modal-x:focus-visible{ box-shadow:0 0 0 3px var(--focus-ring); }
+
+/* Die Fenster im Tool sind als <div class="fenster"><div class="box">…</div></div> gebaut.
+   Im escape-os-Kit ist .modal die Box selbst — deshalb eine eigene Klasse fuer die Huelle.
+   Ohne sie lag das Fenster im Dokumentfluss: ungebremst hoch, nicht zentriert, die Knoepfe
+   unten ausser Reichweite (Anne 17.09.: „ganz unten irgendwas geoeffnet, das kann ich nicht sehen"). */
+.fenster{
+  position:fixed; inset:0; z-index:90; display:flex; align-items:center; justify-content:center;
+  padding:var(--s5); background:rgba(26,40,52,.42); backdrop-filter:blur(2px);
+  animation:fade var(--med) var(--ease);
+}
+.fenster > .box{
+  position:relative; display:flex; flex-direction:column;
+  width:min(560px,94vw); max-height:88vh; overflow-y:auto;
+  padding:var(--s6); background:var(--paper); border-radius:var(--r-lg); box-shadow:var(--sh-3);
+  animation:modal-in var(--med) var(--ease);
+}
+/* Die Handlungsknoepfe bleiben sichtbar, auch wenn der Inhalt lang ist */
+.fenster > .box > .row:last-child{
+  position:sticky; bottom:calc(var(--s6) * -1); margin:0 calc(var(--s6) * -1) calc(var(--s6) * -1);
+  padding:var(--s4) var(--s6); background:var(--paper);
+  border-top:1px solid var(--hair); border-radius:0 0 var(--r-lg) var(--r-lg);
+}
+@media (max-height:760px){ .fenster > .box{ max-height:94vh; } }
+
 @keyframes fade{ from{ opacity:0; } }
 @keyframes modal-in{ from{ opacity:0; transform:translateY(14px) scale(.98); } }
 
@@ -1033,6 +1057,8 @@ tr:last-child td{ border-bottom:0; }
 <div id="toast" class="toast" hidden></div>
 <script>
 const $=(s,r=document)=>r.querySelector(s);
+// Datum als JJJJ-MM-TT — wird im Contentplan UND im Einplanen-Fenster gebraucht, muss global sein
+const fmt=(d)=>d.toISOString().slice(0,10);
 const esc=(s)=>String(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LADDER=['neu','ingest','transkript','kandidaten','reels','gerendert','qa','viral-ok','freigegeben','bereit','auftrag','geplant','gepostet','kpi'];
 const LABEL={neu:'neu',ingest:'eingelesen',transkript:'Transkript',kandidaten:'Kandidaten',reels:'Reels in Arbeit',angelegt:'angelegt',gerendert:'gerendert',qa:'QA PASS',nachbessern:'nachbessern','viral-ok':'Viral ≥ Schwelle',freigegeben:'freigegeben',bereit:'bereit zum Posten',auftrag:'Einplan-Auftrag (wartet auf Claude-Routine)',geplant:'in Metricool geplant',gepostet:'gepostet',kpi:'KPI ausgewertet'};
@@ -1051,7 +1077,7 @@ function auftragKnopfStand(){
 }
 function auftraegeZeigen(){
   const l=(S&&S.protokoll)||[];
-  const d=document.createElement('div'); d.className='modal'; d.id='aufModal';
+  const d=document.createElement('div'); d.className='fenster'; d.id='aufModal';
   d.innerHTML=`<div class="box" style="width:min(620px,94vw);max-height:86vh;overflow:auto">
     <div class="row" style="justify-content:space-between;align-items:baseline">
       <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:20px;margin:0">Aufträge</h2>
@@ -1096,7 +1122,7 @@ async function auftragOeffnen(id){
             ? 'Der Auftrag liegt online und wird beim nächsten Abgleich vom Mac übernommen (höchstens eine Minute). Danach steht hier das Ergebnis.'
             : 'Zu diesem Auftrag gibt es keinen Eintrag mehr — das Protokoll hält die letzten 40 fest.' };
   }
-  const d=document.createElement('div'); d.className='modal'; d.id='aufDetail';
+  const d=document.createElement('div'); d.className='fenster'; d.id='aufDetail';
   d.innerHTML=`<div class="box" style="width:min(680px,95vw);max-height:88vh;overflow:auto">
     <div class="row" style="justify-content:space-between;align-items:baseline">
       <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:19px;margin:0">${esc(a.was||a.cmd||id)}</h2>
@@ -1946,7 +1972,7 @@ async function planEinplanen(datum, zeit, matId){
   if(!m.length){alert('Es ist noch kein freigegebenes Material da, das eingeplant werden könnte.\n\nKarussells und Storys müssen erst in ihrer Freigabe-Seite freigegeben werden.');return}
   const slots=['08:00','11:30','14:00','17:00','20:00'];
   if(zeit&&!slots.includes(zeit))slots.unshift(zeit);
-  const d=document.createElement('div'); d.className='modal'; d.id='planModal';
+  const d=document.createElement('div'); d.className='fenster'; d.id='planModal';
   const tage=[...Array(14)].map((_,i)=>{const x=new Date();x.setDate(x.getDate()+i);return x});
   d.innerHTML=`<div class="box"><h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:22px">Einplanen</h2>
     <label>Beitrag</label><select id="pmMat">${m.map(x=>`<option value="${esc(x.id)}"${matId===x.id?' selected':''}>${esc(x.typ||'')} · ${esc(x.titel||x.id)}${x.alter_tage!=null?' · '+(x.alter_tage===0?'heute':x.alter_tage+' Tage alt'):''}</option>`).join('')}</select>
@@ -1969,12 +1995,12 @@ function matAnsehen(id){
   const u=(f)=>'/datei?p='+encodeURIComponent(f);
   // Fertiges Reel: die kleine Web-Fassung des freigegebenen Exports, damit es auch online laeuft
   const inhalt = x.video
-    ? `<video src="${x.video}" controls preload="metadata" playsinline style="width:100%;max-height:64vh;border-radius:12px;background:#000"></video>`
+    ? `<video src="${x.video}" controls preload="metadata" playsinline style="width:auto;max-width:100%;max-height:42vh;border-radius:12px;background:#000;display:block;margin:0 auto"></video>`
     : (x.dateien||[]).map(f=>/\.(mp4|mov|m4v)$/i.test(f)
-        ? `<video src="${u(f)}" controls preload="metadata" playsinline style="width:100%;max-height:64vh;border-radius:12px;background:#000"></video>`
+        ? `<video src="${u(f)}" controls preload="metadata" playsinline style="width:auto;max-width:100%;max-height:42vh;border-radius:12px;background:#000;display:block;margin:0 auto"></video>`
         : `<img src="${u(f)}" style="width:100%;border-radius:10px;display:block;margin-bottom:8px">`).join('');
   const cov = x.coverBild ? `<div class="sec"><h2>Cover</h2><img src="${x.coverBild}" style="width:180px;border-radius:10px;display:block"></div>` : '';
-  const d=document.createElement('div'); d.className='modal'; d.id='matModal';
+  const d=document.createElement('div'); d.className='fenster'; d.id='matModal';
   d.innerHTML=`<div class="box" style="width:min(560px,94vw);max-height:88vh;overflow:auto">
     <div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:20px;margin:0">${esc(x.titel||x.id)}</h2>
     <button class="btn ghost" onclick="document.getElementById('matModal').remove()">schließen</button></div>
@@ -2000,7 +2026,7 @@ function rpAendern(datum, material){
   const tage=[...Array(21)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d.toISOString().slice(0,10)});
   const zeiten=['08:00','11:30','14:00','17:00','20:00'];
   if(e.uhrzeit&&!zeiten.includes(e.uhrzeit))zeiten.unshift(e.uhrzeit);
-  const d=document.createElement('div'); d.className='modal'; d.id='rpModal';
+  const d=document.createElement('div'); d.className='fenster'; d.id='rpModal';
   d.innerHTML=`<div class="box" style="width:min(520px,94vw)">
     <div class="row" style="justify-content:space-between;align-items:baseline">
       <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:19px;margin:0">${esc(e.thema||(m&&m.titel)||material||'Eintrag')}</h2>
@@ -2061,7 +2087,7 @@ function planEintrag(unter){
   const zeiten=SLOTS.includes(a.uhrzeit)?SLOTS:[a.uhrzeit,...SLOTS];
   const schau = m && m.video ? `<video src="${m.video}" controls preload="metadata" playsinline style="width:100%;max-height:46vh;border-radius:12px;background:#000"></video>`
               : m && (m.coverBild||m.bild) ? `<img src="${m.coverBild||m.bild}" style="width:170px;border-radius:10px;display:block">` : '';
-  const d=document.createElement('div'); d.className='modal'; d.id='peModal';
+  const d=document.createElement('div'); d.className='fenster'; d.id='peModal';
   d.innerHTML=`<div class="box" style="width:min(600px,94vw);max-height:88vh;overflow:auto">
     <div class="row" style="justify-content:space-between;align-items:baseline">
       <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:20px;margin:0">${esc(a.titel||a.thema||a.typ)}</h2>
@@ -2110,7 +2136,6 @@ function vPlan(){
   }).catch(()=>{})}
   // Anne 14.09.: Contentplan = Kalender + Redaktionsplan + ALLE freigegebenen Reels (CapCut-Export = freigegeben). Kein Reiter „Freigegeben" mehr.
   const p=S.plan||{slots:{},reels:[]}; const days=[...Array(7)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d});
-  const fmt=(d)=>d.toISOString().slice(0,10);
   const rp=S.redaktionsplan||[];
   const mk=S.metricool_kalender||null;
   // Materialbibliothek: alles Einplanbare, nach Art gruppiert und per Drag & Drop in den Kalender ziehbar
