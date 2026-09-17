@@ -593,7 +593,9 @@ function karListe(m,art){
   const titel = art==='roh' ? 'Karussells · Rohmaterial' : 'Karussells · Freigabe';
   m.innerHTML=`<h1>${titel}</h1><div id="ksBox">lädt …</div>`;
   api('/api/karussells').then(d=>{const b=$('#ksBox');if(!b)return;
-    const ks=(d.karussells||[]);
+    if(!d||!Array.isArray(d.karussells)){b.innerHTML='<p class="meta">Konnte nicht laden — versuche es gleich noch einmal …</p>';
+      clearTimeout(window._ksT);window._ksT=setTimeout(()=>{if(view==='karRoh'||view==='karFrei')karListe(m,art)},3000);return}
+    const ks=d.karussells;
     const gruppen = art==='roh'
       ? [['eingang','Eingelaufen — Seiten fehlen noch']]
       : [['pruefung','Zur Freigabe'],['bereit-zum-posten','Freigegeben — im Contentplan'],['gepostet','Gepostet']];
@@ -615,7 +617,9 @@ function karListe(m,art){
             ${g==='pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="ksFreigeben('${esc(x.name)}')">Freigeben</button>`:''}
             ${g==='bereit-zum-posten'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>`:''}
           </div></div>`).join('')}</div></div>`:''}).join('')
-      || `<p class="meta">${art==='roh'?'Kein offenes Rohmaterial — alles hat Seiten.':'Nichts zur Freigabe.'}</p>`});
+      || `<p class="meta">${art==='roh'
+            ? 'Kein offenes Rohmaterial — alle Karussells haben Seiten'+(ks.length?'. <a class="netz" style="cursor:pointer" onclick="nav(\'karFrei\')">zur Freigabe →</a>':'')
+            : 'Nichts zur Freigabe'+(ks.length?' — '+ks.length+' Karussells liegen in anderen Phasen':'')}</p>`});
   return '';
 }
 // Storys: Rohmaterial und Freigabe getrennt
@@ -625,7 +629,10 @@ function storyListe(m,art){
   const titel = art==='roh' ? 'Storys · Rohmaterial' : 'Storys · Freigabe';
   m.innerHTML=`<h1>${titel}</h1><div id="stBox">lädt …</div>`;
   api('/api/storys').then(d=>{const b=$('#stBox');if(!b)return;
-    const xs=d.storys||[];
+    // Ein fehlgeschlagener Abruf darf nicht wie „nichts da" aussehen (Anne 17.09.)
+    if(!d||!Array.isArray(d.storys)){b.innerHTML='<p class="meta">Konnte nicht laden — versuche es gleich noch einmal …</p>';
+      clearTimeout(window._stT);window._stT=setTimeout(()=>{if(view==='storyRoh'||view==='storyFrei')storyListe(m,art)},3000);return}
+    const xs=d.storys;
     const gruppen = art==='roh'
       ? [['rohmaterial','Eingelaufen — bekommt automatisch Untertitel']]
       : [['pruefung','Zur Freigabe — Untertitel sind drauf'],['freigegeben','Freigegeben — im Contentplan'],['nacharbeit','Bei Nico in Nacharbeit']];
@@ -643,7 +650,9 @@ function storyListe(m,art){
               <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
             ${ph==='rohmaterial'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('storyroh',{name:'${esc(x.name)}'})">Ansehen</button>`:''}
           </div></div>`).join('')}</div></div>`:''}).join('')
-      || `<p class="meta">${art==='roh'?'Kein offenes Rohmaterial.':'Nichts zur Freigabe.'}</p>`});
+      || `<p class="meta">${art==='roh'
+            ? 'Kein offenes Rohmaterial'+(xs.length?' — alles verarbeitet. '+xs.length+' Storys liegen weiter hinten: ':' ')+(xs.length?'<a class="netz" style="cursor:pointer" onclick="nav(\'storyFrei\')">zur Freigabe →</a>':'')
+            : 'Nichts zur Freigabe'+(xs.length?' — '+xs.length+' Storys sind noch Rohmaterial: <a class="netz" style="cursor:pointer" onclick="nav(\'storyRoh\')">ansehen →</a>':'')}</p>`});
   return '';
 }
 // Eigene Seite fuer Karussells (Anne 17.09.): erst prueft jemand, dann steht es im Contentplan
@@ -1134,14 +1143,18 @@ function vPlan(){
     const vorschau=(x)=>{if(x.coverBild||x.bild)return `<img src="${x.coverBild||x.bild}" alt="">`;
       const f=(x.dateien||[])[0]||'';const u='/datei?p='+encodeURIComponent(f);
       return /\.(mp4|mov|m4v)$/i.test(f)?`<video src="${u}" preload="metadata" muted></video>`:`<img src="${u}" alt="">`};
+    const leer={'Reel':['Reels','karFrei','Kein freigegebenes Reel'],'Karussell':['Karussells','karFrei','Kein freigegebenes Karussell — zur Freigabe geht es hier'],'Story':['Storys','storyFrei','Keine freigegebene Story — zur Freigabe geht es hier']};
     box.innerHTML=gruppen.map(([typ,titel])=>{const xs=m.filter(x=>x.typ===typ);
-      return xs.length?`<div class="matgruppe"><h3>${titel} · ${xs.length}</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${xs.map(x=>`
+      // Alle drei Arten bleiben sichtbar, auch wenn eine gerade leer ist (Anne 17.09.)
+      if(!xs.length){const l=leer[typ]||[titel,'plan','nichts da'];
+        return `<div class="matgruppe"><h3>${titel} · 0</h3><p class="meta" style="margin:0 0 4px">${esc(l[2])} · <a class="netz" style="cursor:pointer" onclick="nav('${l[1]}')">öffnen →</a></p></div>`}
+      return `<div class="matgruppe"><h3>${titel} · ${xs.length}</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${xs.map(x=>`
         <div class="matkarte" draggable="true" ondragstart="planZieht('${esc(x.id)}');event.dataTransfer.setData('text/plain','${esc(x.id)}')" title="In den Kalender ziehen">
           <span style="cursor:zoom-in" onclick="matAnsehen('${esc(x.id)}')">${vorschau(x)}</span>
           <div style="min-width:0;flex:1"><b style="display:block;font-size:13px;line-height:1.25;cursor:${x.typ==='Karussell'?'pointer':'default'}" ${x.typ==='Karussell'?`onclick="nav('karussell',{name:'${esc(x.titel)}'})"`:''}>${esc((x.titel||x.id).slice(0,46))}</b>
           <span class="meta" style="font-size:11px">${x.alter_tage===0?'heute':x.alter_tage+' Tage alt'}</span>
           <div class="row" style="margin-top:6px;gap:6px"><button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="matAnsehen('${esc(x.id)}')">Ansehen</button><button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="planEinplanen('${heute}',null,'${esc(x.id)}')">Einplanen</button>${x.typ==='Karussell'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.titel)}'})">Bearbeiten</button>`:''}</div></div>
-        </div>`).join('')}</div></div>`:''}).join('')||'<p class="meta">Nichts Einplanbares gefunden.</p>'};
+        </div>`).join('')}</div></div>`}).join('')};
   setTimeout(()=>window.matRender(),60);
 
   return `<h1>Contentplan</h1>
