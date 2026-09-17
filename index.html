@@ -29,6 +29,13 @@
   --danger:#C2491F; --danger-tint:#FBE3DB;
   --ok:#2F7D55; --ok-tint:#E3F1E9;
 
+  /* Bruecke: Namen aus der Zeit vor dem escape-os-Kit, damit nichts unsichtbar wird.
+     Jeder zeigt auf das passende Kit-Token — neue Regeln nehmen die Kit-Namen. */
+  --navy:var(--ink); --navy3:var(--tint); --grey:var(--slate);
+  --line:var(--hair); --rand:var(--hair);
+  --camel:var(--accent); --camelbg:var(--accent-soft);
+  --yellow:#FDDF5B; --green:var(--ok); --red:var(--danger);
+
   /* type */
   --serif:'Playfair Display',Georgia,serif;
   --sans:'Jost','Helvetica Neue',Arial,sans-serif;
@@ -1060,15 +1067,42 @@ function auftraegeZeigen(){
   d.onclick=(e)=>{if(e.target===d)d.remove()};
   document.body.appendChild(d);
 }
+// Adressen im Ergebnis anklickbar machen — Nico arbeitet online und braucht den Dropbox-Ordner
+// mit einem Klick, nicht als Text zum Abtippen.
+function mitLinks(t){
+  return esc(String(t||'')).replace(/(https?:\/\/[^\s<]+)/g,
+    '<a class="netz" href="$1" target="_blank" rel="noopener">$1</a>');
+}
+// „In CapCut bearbeiten" liefert das FERTIGE CapCut-Projekt — alle Ebenen, Kamerafahrten, Grafiken,
+// Untertitel. Zwei Wege, weil CapCuts Cloud-Synchronisierung ausfallen kann (17.09.: sie stand auf aus):
+//  1. capcut-paket: ZIP mit Projekt + Material + Installer in die Dropbox. Entpacken, Doppelklick, fertig.
+//     Funktioniert unabhaengig von Konto und Cloud — das ist der verlaessliche Weg.
+//  2. capcut-draft: baut das Projekt auf dem Mac; bei eingeschalteter Projektsynchronisierung erscheint
+//     es direkt in CapCut bei jedem, der mit dem Marketing-Zugang angemeldet ist.
+async function capcutOeffnen(pfad, slug){
+  const draft = ['capcut-draft', pfad];
+  if (window.HOSTED) draft.push('--nicht-oeffnen');    // online: nicht Annes CapCut aufreissen
+  job(draft, 'CapCut-Projekt bauen');
+  toast('CapCut-Projekt wird gebaut. Danach liegt es in CapCut unter „Projekte" — und als ZIP in Dropbox „Reels-Uebergabe/' + slug + '".', 11000);
+  setTimeout(()=>job(['capcut-paket', pfad], 'CapCut-Projekt in die Dropbox'), 1500);
+}
 async function auftragOeffnen(id){
-  const a=await api('/api/auftrag/'+encodeURIComponent(id));
+  let a=await api('/api/auftrag/'+encodeURIComponent(id));
+  // Ein Auftrag, den der Mac noch nicht kennt (online ausgeloest) oder den es nicht mehr gibt,
+  // darf kein leeres Fenster ergeben (Anne 17.09.: „es tut sich nichts").
+  if(!a || (!a.was && !a.cmd && !a.ergebnis && !a.log)){
+    a = { was:'Auftrag '+id, status: String(id).startsWith('a-') ? 'in der Warteschlange' : 'nicht gefunden',
+          ergebnis: String(id).startsWith('a-')
+            ? 'Der Auftrag liegt online und wird beim nächsten Abgleich vom Mac übernommen (höchstens eine Minute). Danach steht hier das Ergebnis.'
+            : 'Zu diesem Auftrag gibt es keinen Eintrag mehr — das Protokoll hält die letzten 40 fest.' };
+  }
   const d=document.createElement('div'); d.className='modal'; d.id='aufDetail';
   d.innerHTML=`<div class="box" style="width:min(680px,95vw);max-height:88vh;overflow:auto">
     <div class="row" style="justify-content:space-between;align-items:baseline">
       <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:19px;margin:0">${esc(a.was||a.cmd||id)}</h2>
       <button class="btn ghost" onclick="document.getElementById('aufDetail').remove()">schließen</button></div>
     <p class="meta" style="font-size:12px;margin:6px 0 0">${esc(a.status||'')} · ${zeit(a.start)}${a.ende?' – '+zeit(a.ende)+' ('+dauer(a.start,a.ende)+')':''}</p>
-    ${a.ergebnis?`<div class="sec"><h2>Ergebnis</h2><div style="font-size:13px;white-space:pre-wrap">${esc(a.ergebnis)}</div></div>`:''}
+    ${a.ergebnis?`<div class="sec"><h2>Ergebnis</h2><div style="font-size:13px;white-space:pre-wrap">${mitLinks(a.ergebnis)}</div></div>`:''}
     ${a.log?`<div class="sec"><h2>Protokoll</h2><pre style="font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:40vh;overflow:auto;background:var(--navy3);padding:10px;border-radius:8px">${esc(a.log)}</pre></div>`:''}</div>`;
   d.onclick=(e)=>{if(e.target===d)d.remove()};
   document.body.appendChild(d);
@@ -1436,7 +1470,7 @@ function vVorschnitt(){
     <div class="row" style="justify-content:space-between"><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span><span class="meta">${r.dauer_s?Math.round(r.dauer_s)+' s':''}</span></div>
     <h3 style="margin-top:8px">${esc(r.titel)}</h3>
     <div class="meta">${r.gerendert?`Viral ${r.viral?r.viral.score+'/'+r.viral.schwelle:'–'} · CTA ${esc(r.cta||'–')}`:'wird gerade gebaut …'}</div>
-    <div class="row" style="margin-top:10px"><button class="btn" onclick="event.stopPropagation();job(['dropbox-uebergabe','${esc(WORKP(sid))}/reels/${esc(r.slug)}'],'An CapCut übergeben');toast('Übergabe läuft: Quelle + Vorschnitt + Untertitel + Anleitung landen in Dropbox „Reels-Uebergabe/${esc(r.slug)}“. In CapCut Web aus Dropbox öffnen. Export nach „Reels-Freigabe“ → landet automatisch in 3 · Freigegeben.',10000)">▶ In CapCut bearbeiten</button>${window.HOSTED?'':`<button class="btn ghost" onclick="event.stopPropagation();job(['capcut-draft','${esc(WORKP(sid))}/reels/${esc(r.slug)}'],'CapCut lokal öffnen')">auf diesem Mac öffnen</button>`}</div>
+    <div class="row" style="margin-top:10px"><button class="btn btn-primary" onclick="event.stopPropagation();capcutOeffnen('${esc(WORKP(sid))}/reels/${esc(r.slug)}','${esc(r.slug)}')">▶ In CapCut bearbeiten</button>${window.HOSTED?'':`<button class="btn ghost" onclick="event.stopPropagation();job(['capcut-draft','${esc(WORKP(sid))}/reels/${esc(r.slug)}'],'CapCut lokal öffnen')">auf diesem Mac öffnen</button>`}</div>
    </div>`).join('')}</div>`).join(''):''}`;
 }
 function vEingang(){
@@ -1535,7 +1569,7 @@ function storyListe(m,art){
       return g.length?`<div class="sec"><h2>${t} <span class="pill">${g.length}</span></h2>
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${g.map(x=>`
         <div class="card">${x.absender?`<div class="eyebrow">von ${esc(x.absender)}</div>`:''}<b style="font-size:13px;line-height:1.25;display:block">${esc(storyTitel(x))}</b>${x.hinweis?`<div class="meta" style="font-size:11px;margin-top:2px">${esc(x.hinweis.slice(0,120))}</div>`:''}
-          ${x.video?`<video src="${x.video}" controls preload="metadata" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:#000"></video>`
+          ${x.video?`<video src="${x.video}" ${x.bild?`poster="${x.bild}"`:''} controls preload="none" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:var(--tint);aspect-ratio:9/16;object-fit:cover"></video>`
                    :`<div class="meta" style="font-size:11px;margin:8px 0">${x.dateien||0} Datei(en) · ${esc(x.quelle||'')}</div>`}
           ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto">${esc(x.notizen.slice(0,200))}</div>`:''}
           <div class="row" style="gap:6px;margin-top:8px">

@@ -28,6 +28,29 @@ const readJSON = (f, d) => { try { return JSON.parse(fs.readFileSync(f, "utf8"))
 const writeJSON = (f, o) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + ".tmp", JSON.stringify(o)); fs.renameSync(f + ".tmp", f); };
 const SNAP = path.join(DATA, "snapshot.json"), ACT = path.join(DATA, "actions.json");
 let snapshot = readJSON(SNAP, {}), actions = readJSON(ACT, []);
+
+// Render Free hat keinen dauerhaften Speicher: schlaeft die Instanz ein, startet sie leer. Ist der Mac
+// dann aus, saehe man leere Seiten (Anne 17.09.: „Was passiert, wenn mein Mac gar nicht an ist?").
+// Deshalb liegt der Stand zusaetzlich in einem privaten GitHub-Repo — von dort wird er beim Start geholt.
+// Noetig dafuer: ENV STAND_TOKEN (GitHub-Token mit Leserecht), optional STAND_REPO.
+const STAND_REPO = process.env.STAND_REPO || "theescapetheory/tet-reel-stand";
+const STAND_TOKEN = process.env.STAND_TOKEN || "";
+async function standHolen() {
+  if (!STAND_TOKEN || (snapshot && snapshot.stand)) return;        // schon etwas da -> nichts tun
+  try {
+    const r = await fetch(`https://api.github.com/repos/${STAND_REPO}/contents/snapshot.json`, {
+      headers: { Authorization: "Bearer " + STAND_TOKEN, Accept: "application/vnd.github.raw",
+                 "User-Agent": "escape-cut" },
+    });
+    if (!r.ok) { console.log("Stand von GitHub: HTTP " + r.status); return; }
+    const neu = JSON.parse(await r.text());
+    if (neu && typeof neu === "object") {
+      snapshot = neu; writeJSON(SNAP, snapshot);
+      console.log("Stand von GitHub geladen (" + (snapshot.stand || "ohne Datum") + ")");
+    }
+  } catch (e) { console.log("Stand von GitHub nicht geladen: " + e.message); }
+}
+standHolen();
 const sendJSON = (res, code, o) => { res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }); res.end(JSON.stringify(o)); };
 const readBody = (req, limit = 50e6) => new Promise((ok, bad) => { const c = []; let n = 0; req.on("data", (d) => { n += d.length; if (n > limit) { bad(new Error("zu gross")); req.destroy(); } c.push(d); }); req.on("end", () => ok(Buffer.concat(c))); req.on("error", bad); });
 const safe = (root, rel) => { const p = path.normalize(path.join(root, rel)); return p.startsWith(root) ? p : null; };
