@@ -26,6 +26,15 @@ h1 em{font-style:italic;font-weight:400;color:var(--camel)}
  nav button{text-align:left;padding:10px 12px}
  main{flex:1;max-width:1180px;padding:32px 40px}
 }
+.navgruppe{display:flex;flex-direction:column}
+.navkopf{display:flex;justify-content:space-between;align-items:center;width:100%}
+.navkopf span{font-size:10px;transition:transform .15s;opacity:.6}
+.navgruppe.zu .navkopf span{transform:rotate(-90deg)}
+.navgruppe.zu .navkinder{display:none}
+.navkinder{display:flex;flex-direction:column;gap:1px}
+.navkinder button{font-size:13px;font-weight:500;padding-left:26px!important}
+.navkinder button.on{font-weight:700}
+@media(max-width:1099px){.navgruppe{flex-direction:row;align-items:center;gap:2px}.navkinder{flex-direction:row}.navkopf span{display:none}.navkinder button{padding-left:9px!important}}
 .sub{color:var(--grey);margin-bottom:22px;font-size:15px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--rand);padding:20px 22px;cursor:pointer;transition:border-color .15s,box-shadow .15s;box-shadow:0 1px 2px rgba(22,35,58,.04)}
@@ -117,7 +126,27 @@ body.schnitt h1{font-size:18px}
 </head>
 <body>
 <header><div class="brand">escape-cut <span style="color:var(--grey);font-weight:400;letter-spacing:0;text-transform:none"></span></div>
-<nav><button data-v="ueber" class="on">Übersicht</button><button data-v="eingang">1 · Rohmaterial</button><button data-v="vorschnitt">2 · Vorschnitt</button><button data-v="schnitt" id="navSchnitt" hidden>✂ Schnitt (CapCut)</button><button data-v="karussells">Karussells</button><button data-v="storys">Storys</button><button data-v="plan">3 · Contentplan</button><button data-v="kpi">4 · KPI</button><button data-v="lernen">Lernen</button></nav><span id="onlineStand" class="meta" hidden></span><button id="auftragKnopf" class="btn ghost" style="font-size:12px;padding:6px 12px;margin-left:auto" onclick="auftraegeZeigen()">Aufträge</button></header>
+<nav>
+<button data-v="ueber" class="on">Übersicht</button>
+<button data-v="upload">Upload</button>
+<div class="navgruppe" data-g="reels"><button class="navkopf" onclick="navGruppe('reels')">Reels<span>▾</span></button><div class="navkinder">
+  <button data-v="eingang">Rohmaterial</button>
+  <button data-v="vorschnitt">Vorschnitt</button>
+  <button data-v="studio">Schnittstudio</button>
+  <button data-v="schnitt" id="navSchnitt" hidden>✂ Schnitt (CapCut)</button>
+</div></div>
+<div class="navgruppe" data-g="kar"><button class="navkopf" onclick="navGruppe('kar')">Karussells<span>▾</span></button><div class="navkinder">
+  <button data-v="karRoh">Rohmaterial</button>
+  <button data-v="karFrei">Freigabe</button>
+</div></div>
+<div class="navgruppe" data-g="story"><button class="navkopf" onclick="navGruppe('story')">Storys<span>▾</span></button><div class="navkinder">
+  <button data-v="storyRoh">Rohmaterial</button>
+  <button data-v="storyFrei">Freigabe</button>
+</div></div>
+<button data-v="plan">Contentplan</button>
+<button data-v="kpi">KPI</button>
+<button data-v="lernen">Lernsystem intern</button>
+</nav><span id="onlineStand" class="meta" hidden></span><button id="auftragKnopf" class="btn ghost" style="font-size:12px;padding:6px 12px;margin-left:auto" onclick="auftraegeZeigen()">Aufträge</button></header>
 <main id="main"></main>
 <div id="toast" class="toast" hidden></div>
 <script>
@@ -172,8 +201,21 @@ async function auftragOeffnen(id){
 function toast(t,ms=4000){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(e._t);e._t=setTimeout(()=>e.hidden=true,ms)}
 function ladder(st){const i=LADDER.indexOf(st);return '<div class="ladder">'+LADDER.map((l,k)=>`<i class="${k<i?'done':k===i?'on':''}" title="${LABEL[l]}"></i>`).join('')+'</div>'}
 async function load(){S=await api('/api/state');auftragKnopfStand();if(window.HOSTED){api('/api/online').then(o=>{const e=$('#onlineStand');if(!e)return;e.hidden=false;e.textContent=o.stand?('Stand '+o.stand.replace('T',' ').slice(0,16)+(o.offen?' · '+o.offen+' offen':'')):'noch kein Sync'})}if(view==='reel'&&document.activeElement&&document.activeElement.tagName==='TEXTAREA')return;if(view!=='reel')render()}
-function nav(v,extra){view=v;Object.assign(cur,extra||{});document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));render()}
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>nav(b.dataset.v));
+// Gruppenkopf ist nur ein Reiter zum Auf- und Zuklappen, dahinter liegt keine Seite (Anne 17.09.)
+const NAV_GRUPPE={eingang:'reels',vorschnitt:'reels',studio:'reels',schnitt:'reels',session:'reels',reel:'reels',
+  karRoh:'kar',karFrei:'kar',karussell:'kar',storyRoh:'story',storyFrei:'story',storyroh:'story'};
+function navGruppe(g,zustand){
+  const el=document.querySelector(`.navgruppe[data-g="${g}"]`); if(!el)return;
+  const zu = zustand==null ? !el.classList.contains('zu') : !zustand;
+  el.classList.toggle('zu',zu);
+  try{const st=JSON.parse(localStorage.getItem('navZu')||'{}');st[g]=zu;localStorage.setItem('navZu',JSON.stringify(st))}catch{}
+}
+function nav(v,extra){view=v;Object.assign(cur,extra||{});
+  document.querySelectorAll('nav button[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  if(NAV_GRUPPE[v]) navGruppe(NAV_GRUPPE[v],true);
+  render()}
+document.querySelectorAll('nav button[data-v]').forEach(b=>b.onclick=()=>nav(b.dataset.v));
+try{const st=JSON.parse(localStorage.getItem('navZu')||'{}');Object.entries(st).forEach(([g,zu])=>{if(zu)navGruppe(g,false)})}catch{}
 if(window.tetDesktop){const nb=document.getElementById('navSchnitt');if(nb)nb.hidden=false}
 async function sessionEntfernen(id){if(!confirm('Diesen Upload aus dem Eingang entfernen? (Datei wird verschoben, nicht gelöscht)'))return;const r=await post('/api/session-entfernen',{id});toast(r.ok?'Entfernt':'Fehler: '+(r.error||''));nav('eingang')}
 async function uploadLink(){const d=await api('/api/upload-link');if(!d.link)return toast('Kein Upload-Schlüssel gesetzt');try{await navigator.clipboard.writeText(d.link)}catch{}toast('Upload-Link kopiert: '+d.link,12000)}
@@ -218,8 +260,14 @@ function render(){
   if(view==='eingang') return m.innerHTML=vEingang();
   if(view==='storyroh') return vStoryRoh(m);
   if(view==='karussell') return vKarussell(m);
-  if(view==='karussells') return vKarussells(m);
-  if(view==='storys') return vStorys(m);
+  if(view==='upload') return vUpload(m);
+  if(view==='studio') return vStudio(m);
+  if(view==='karRoh') return vKarRoh(m);
+  if(view==='karFrei') return vKarFrei(m);
+  if(view==='storyRoh') return vStoryRohListe(m);
+  if(view==='storyFrei') return vStoryFrei(m);
+  if(view==='karussells') return vKarFrei(m);
+  if(view==='storys') return vStoryFrei(m);
   if(view==='vorschnitt') return m.innerHTML=vVorschnitt();
   if(view==='frei') return nav('plan');
   if(view==='kpi') return vKpi(m);
@@ -381,41 +429,46 @@ function vUeber(m){
       ${st.grund?`<p class="sub" style="color:var(--red)">${esc(st.grund)}</p>`:''}
     </div>`).join('');
 
+    const st=d.stand||{};
+    const stufe=(zahl,text,ziel)=>`<div class="kpi" style="cursor:pointer" onclick="nav('${ziel}')"><span>${text}</span><b>${zahl}</b></div>`;
     m.innerHTML=`<h1>Übersicht</h1>
 
-    <div class="sec"><h2>Material hochladen</h2>
-      <div class="card">
-        <div class="row" style="gap:18px;align-items:center;flex-wrap:wrap">
-          <div id="uplBox"></div>
-          <div id="claudeZugang" style="width:100%"></div>
-        </div>
-        
+    ${st.laeuft?`<div class="card" style="border-color:var(--camel);margin-bottom:18px">
+      <b style="font-size:14px">Läuft gerade: ${esc(st.laeuft.session)}</b>
+      <div class="meta" style="font-size:12px;margin-top:4px">seit ${st.laeuft.minuten} Min · ${esc((st.laeuft.letzte||[]).slice(-1)[0]||'')}</div></div>`:''}
+
+    <div class="sec"><h2>Wo liegt was</h2>
+      <div class="kpi-grid">
+        ${stufe(st.reels?.roh??0,'Reels · Rohmaterial','eingang')}
+        ${stufe(st.reels?.vorschnitt??0,'Reels · im Vorschnitt','vorschnitt')}
+        ${stufe((st.karussells?.eingang??0)+(st.karussells?.pruefung??0),'Karussells · offen','karFrei')}
+        ${stufe(st.storys?.pruefung??0,'Storys · zur Freigabe','storyFrei')}
+      </div>
+      <div class="kpi-grid" style="margin-top:12px">
+        ${stufe(st.reels?.freigegeben??0,'Reels freigegeben','plan')}
+        ${stufe(st.karussells?.frei??0,'Karussells freigegeben','karFrei')}
+        ${stufe(st.storys?.frei??0,'Storys freigegeben','storyFrei')}
+        ${stufe(st.storys?.nacharbeit??0,'bei Nico in Nacharbeit','storyFrei')}
       </div>
     </div>
 
-    <div class="sec"><h2>Rohmaterial für Reels ${r.neu?`<span class="pill neu">${r.neu} neu</span>`:''}</h2>
-      <div class="card">
-        ${reelZeilen?`<table><tr><th>Aufnahme</th><th>Datum</th><th>Status</th><th>Weg</th></tr>${reelZeilen}</table>`:''}
-        <div class="row" style="margin-top:12px"><button class="btn ghost" onclick="nav('eingang')">Alle ${r.gesamt} Aufnahmen →</button>
-        ${r.zuletzt?`<span class="meta">Dropbox zuletzt geprüft: ${esc(String(r.zuletzt).replace('T',' '))}</span>`:''}</div>
-      </div>
-    </div>
+    <div class="sec"><h2>Als Nächstes</h2><div class="card">
+      ${(st.geplant||[]).length?`<table><tr><th>Wann</th><th>Beitrag</th><th>Stand</th></tr>${st.geplant.map(g=>`
+        <tr onclick="nav('plan')" style="cursor:pointer"><td>${esc(g.datum)} ${esc(g.uhrzeit)}</td>
+        <td>${esc(String(g.titel).slice(0,60))}</td><td><span class="pill">${esc(g.status)}</span></td></tr>`).join('')}</table>`
+        :'<p class="meta" style="margin:0">Nichts eingeplant — im Contentplan einen Termin setzen.</p>'}
+      <div class="row" style="margin-top:12px"><button class="btn ghost" onclick="nav('plan')">Zum Contentplan →</button>
+      <button class="btn ghost" onclick="nav('upload')">Material hochladen →</button></div>
+    </div></div>
 
-    ${(d.storyFreigabe||[]).length?`<div class="sec"><h2>Storys zur Freigabe <span class="pill">${d.storyFreigabe.length}</span></h2>
-      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${d.storyFreigabe.map(x=>`
-        <div class="card"><b style="font-size:13px">${esc(x.name)}</b>
-          <video src="${x.video}" controls preload="metadata" playsinline style="width:100%;max-width:200px;border-radius:10px;margin:8px 0;background:#000"></video>
-          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:70px;overflow:auto">${esc(x.notizen.slice(0,240))}</div>`:''}
-          <div class="row" style="gap:6px;margin-top:8px">
-            <button class="btn" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>
-            <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>
-          </div></div>`).join('')}</div></div>`:''}
-    <div class="sec"><h2>Rohmaterial für Stories ${sr.gesamt?`<span class="pill">${sr.gesamt}</span>`:''}</h2>
-      <div class="card">
-        ${storyZeilen?`<table><tr><th>Material</th><th>Zuletzt</th></tr>${storyZeilen}</table>`
-          :''}
-      </div>
-    </div>
+    ${(st.protokoll||[]).length?`<div class="sec"><h2>Zuletzt erledigt</h2><div class="card">
+      ${st.protokoll.map(a=>`<div class="aufz" onclick="auftragOeffnen('${esc(a.id)}')">
+        <span class="dot ${a.status==='läuft'?'laeuft':a.status==='fehler'?'fehler':'fertig'}"></span>
+        <div style="min-width:0;flex:1"><b>${esc(a.was||a.cmd)}</b>
+        <span class="meta" style="font-size:11px">${zeit(a.start)}${a.ende?' · '+dauer(a.start,a.ende):''}</span>
+        ${a.ergebnis?`<div class="erg">${esc(String(a.ergebnis).slice(0,160))}</div>`:''}</div></div>`).join('')}
+    </div></div>`:''}
+
 
     <div class="sec"><h2>Stories heute — sofort raus ${hu.length?`<span class="pill neu">${hu.length}</span>`:''}</h2>
       <div class="card">
@@ -513,6 +566,86 @@ function vEingang(){
   ${S.jobs.length?`<div class="sec"><h2>Letzte Läufe</h2><table>${S.jobs.map(j=>`<tr><td>${esc(j.start.slice(11,16))}</td><td>tet-reel ${esc(j.cmd)}</td><td><span class="pill ${j.status==='fehler'?'fehler':j.status==='fertig'?'ok':''}">${esc(j.status)}</span></td></tr>`).join('')}</table></div>`:''}`;
 }
 function srLaden(btn,url){btn.outerHTML=`<video src="${url}" controls autoplay preload="metadata" style="width:100%;max-width:240px;border-radius:10px"></video>`}
+// Eigene Upload-Seite (Anne 17.09.): alle Upload-Wege an einem Ort, samt Link fuer Externe
+function vUpload(m){
+  m.innerHTML=`<h1>Upload</h1>
+    <div class="sec"><h2>Material hochladen</h2><div class="card"><div id="uplBox"></div></div></div>
+    <div class="sec"><h2>Link für Externe</h2><div class="card">
+      <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn" onclick="uploadLink()">Link kopieren</button>
+        <span class="meta" id="uplLinkText">ohne Login, nur mit Schlüssel — für Team und Externe</span>
+      </div></div></div>
+    <div class="sec"><h2>Claude-Zugang</h2><div class="card"><div id="claudeZugang"></div></div></div>`;
+  uplFormular('uplBox',''); claudeZugang();
+  api('/api/upload-link').then(d=>{const e=document.getElementById('uplLinkText');if(e&&d.link)e.textContent=d.link});
+  return '';
+}
+function vStudio(m){
+  m.innerHTML=`<h1>Schnittstudio</h1>
+    <div class="card"><p style="margin:0;font-size:15px">Kommt demnächst. Bis dahin läuft der Feinschnitt in CapCut —
+    Export dort gilt als Freigabe und landet automatisch im Contentplan.</p></div>`;
+  return '';
+}
+// Karussells: was hereinkam (Rohmaterial) und was zur Freigabe steht
+function vKarRoh(m){ karListe(m,'roh') }
+function vKarFrei(m){ karListe(m,'frei') }
+function karListe(m,art){
+  const titel = art==='roh' ? 'Karussells · Rohmaterial' : 'Karussells · Freigabe';
+  m.innerHTML=`<h1>${titel}</h1><div id="ksBox">lädt …</div>`;
+  api('/api/karussells').then(d=>{const b=$('#ksBox');if(!b)return;
+    const ks=(d.karussells||[]);
+    const gruppen = art==='roh'
+      ? [['eingang','Eingelaufen — Seiten fehlen noch']]
+      : [['pruefung','Zur Freigabe'],['bereit-zum-posten','Freigegeben — im Contentplan'],['gepostet','Gepostet']];
+    const passt=(x,g)=>{
+      if(g==='eingang') return x.phase==='zur-pruefung' && x.slides===0;
+      if(g==='pruefung') return x.phase==='zur-pruefung' && x.slides>0;
+      return x.phase===g;
+    };
+    b.innerHTML=gruppen.map(([g,t])=>{const xs=ks.filter(x=>passt(x,g));
+      return xs.length?`<div class="sec"><h2>${t} <span class="pill">${xs.length}</span></h2>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${xs.map(x=>`
+        <div class="card">
+          ${x.bild?`<img src="${x.bild}" style="width:100%;border-radius:8px;display:block;margin-bottom:8px">`:'<div class="meta" style="font-size:12px;margin-bottom:8px">noch keine Seiten</div>'}
+          <b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
+          <span class="meta" style="font-size:11px">${esc(KAR_ART[x.art]||x.art)}${x.slides?` · ${x.slides} Seiten`:''}${x.material?` · ${x.material} Material`:''}</span>
+          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto;margin-top:6px">${esc(x.notizen.slice(0,200))}</div>`:''}
+          <div class="row" style="gap:6px;margin-top:8px">
+            <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.name)}'})">Öffnen</button>
+            ${g==='pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="ksFreigeben('${esc(x.name)}')">Freigeben</button>`:''}
+            ${g==='bereit-zum-posten'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>`:''}
+          </div></div>`).join('')}</div></div>`:''}).join('')
+      || `<p class="meta">${art==='roh'?'Kein offenes Rohmaterial — alles hat Seiten.':'Nichts zur Freigabe.'}</p>`});
+  return '';
+}
+// Storys: Rohmaterial und Freigabe getrennt
+function vStoryRohListe(m){ storyListe(m,'roh') }
+function vStoryFrei(m){ storyListe(m,'frei') }
+function storyListe(m,art){
+  const titel = art==='roh' ? 'Storys · Rohmaterial' : 'Storys · Freigabe';
+  m.innerHTML=`<h1>${titel}</h1><div id="stBox">lädt …</div>`;
+  api('/api/storys').then(d=>{const b=$('#stBox');if(!b)return;
+    const xs=d.storys||[];
+    const gruppen = art==='roh'
+      ? [['rohmaterial','Eingelaufen — bekommt automatisch Untertitel']]
+      : [['pruefung','Zur Freigabe — Untertitel sind drauf'],['freigegeben','Freigegeben — im Contentplan'],['nacharbeit','Bei Nico in Nacharbeit']];
+    b.innerHTML=gruppen.map(([ph,t])=>{const g=xs.filter(x=>x.phase===ph);
+      return g.length?`<div class="sec"><h2>${t} <span class="pill">${g.length}</span></h2>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${g.map(x=>`
+        <div class="card"><b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
+          ${x.video?`<video src="${x.video}" controls preload="metadata" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:#000"></video>`
+                   :`<div class="meta" style="font-size:11px;margin:8px 0">${x.dateien||0} Datei(en) · ${esc(x.quelle||'')}</div>`}
+          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto">${esc(x.notizen.slice(0,200))}</div>`:''}
+          <div class="row" style="gap:6px;margin-top:8px">
+            ${ph==='pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="stFreigeben('${esc(x.name)}')">Freigeben</button>
+              <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
+            ${ph==='freigegeben'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>
+              <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
+            ${ph==='rohmaterial'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('storyroh',{name:'${esc(x.name)}'})">Ansehen</button>`:''}
+          </div></div>`).join('')}</div></div>`:''}).join('')
+      || `<p class="meta">${art==='roh'?'Kein offenes Rohmaterial.':'Nichts zur Freigabe.'}</p>`});
+  return '';
+}
 // Eigene Seite fuer Karussells (Anne 17.09.): erst prueft jemand, dann steht es im Contentplan
 const KAR_ART={fertig:'fertige Seiten',material:'Rohmaterial — Nico baut die Seiten',anweisung:'nur Anweisungen'};
 function vKarussells(m){
