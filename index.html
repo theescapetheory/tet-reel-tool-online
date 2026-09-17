@@ -438,7 +438,11 @@ function zeitseit(ms){ if(!ms) return ''; const t=Math.round((Date.now()-ms)/864
   return t<=0?'heute':t===1?'gestern':'vor '+t+' Tagen'; }
 
 function vUeber(m){
-  m.innerHTML='<h1>Übersicht</h1>';
+  // Geruest sofort zeigen, statt die Seite leer zu lassen, bis die Daten da sind (Anne 17.09.)
+  m.innerHTML=`<h1>Übersicht</h1>
+    <div class="sec"><h2>Wo liegt was</h2>
+      <div class="kpi-grid">${[1,2,3,4].map(()=>'<div class="kpi"><span>lädt …</span><b>–</b></div>').join('')}</div></div>
+    <div class="sec"><h2>Als Nächstes</h2><div class="card"><p class="meta" style="margin:0">lädt …</p></div></div>`;
   api('/api/uebersicht').then(d=>{
     const r=d.reels, sr=d.storyRoh;
     const arc=d.stories.heute||d.stories.ersatz, istHeute=!!d.stories.heute;
