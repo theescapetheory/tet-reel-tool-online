@@ -467,6 +467,9 @@ function vUeber(m){
     const stufe=(zahl,text,ziel)=>`<div class="kpi" style="cursor:pointer" onclick="nav('${ziel}')"><span>${text}</span><b>${zahl}</b></div>`;
     m.innerHTML=`<h1>Übersicht</h1>
 
+    ${st.bremse?`<div class="card" style="border-left:3px solid var(--yellow);margin-bottom:18px">
+      <b style="font-size:14px">Verarbeitung pausiert: ${esc(st.bremse.grund)}</b>
+      <div class="meta" style="font-size:12px;margin-top:4px">seit ${esc(String(st.bremse.zeit||'').replace('T',' '))} · schützt vor unbemerkten API-Kosten. Höher setzen? Sag Bescheid.</div></div>`:''}
     ${st.laeuft?`<div class="card" style="border-color:var(--camel);margin-bottom:18px">
       <b style="font-size:14px">Läuft gerade: ${esc(st.laeuft.session)}</b>
       <div class="meta" style="font-size:12px;margin-top:4px">seit ${st.laeuft.minuten} Min · ${esc((st.laeuft.letzte||[]).slice(-1)[0]||'')}</div></div>`:''}
