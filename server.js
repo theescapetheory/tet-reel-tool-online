@@ -51,6 +51,28 @@ async function standHolen() {
   } catch (e) { console.log("Stand von GitHub nicht geladen: " + e.message); }
 }
 standHolen();
+
+// Fehlt ein Vorschaubild, wird es einmal aus dem privaten Stand-Repo nachgeholt und hier abgelegt.
+// Grund: Render Free startet nach jedem Deploy und nach jedem Schlaf mit leerem Speicher — vorher
+// blieben Karussells, Storys und Material so lange ohne Bild, bis der Mac alles neu hochgeladen hatte
+// (Anne 18.09.: „karusselbilder werden nicht angezeigt"). Nur Bilder, nur einmal je Datei.
+const bilderVersucht = new Set();
+async function bildHolen(rel, ziel) {
+  if (!STAND_TOKEN || !/\.(jpg|jpeg|png|webp)$/i.test(rel) || bilderVersucht.has(rel)) return false;
+  bilderVersucht.add(rel);
+  try {
+    const url = `https://api.github.com/repos/${STAND_REPO}/contents/assets` +
+      rel.split("/").map(encodeURIComponent).join("/");
+    const r = await fetch(url, { headers: { Authorization: "Bearer " + STAND_TOKEN,
+      Accept: "application/vnd.github.raw", "User-Agent": "escape-studio" } });
+    if (!r.ok) return false;
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length < 200) return false;
+    fs.mkdirSync(path.dirname(ziel), { recursive: true });
+    fs.writeFileSync(ziel, buf);
+    return true;
+  } catch { return false; }
+}
 const sendJSON = (res, code, o) => { res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }); res.end(JSON.stringify(o)); };
 const readBody = (req, limit = 50e6) => new Promise((ok, bad) => { const c = []; let n = 0; req.on("data", (d) => { n += d.length; if (n > limit) { bad(new Error("zu gross")); req.destroy(); } c.push(d); }); req.on("end", () => ok(Buffer.concat(c))); req.on("error", bad); });
 const safe = (root, rel) => { const p = path.normalize(path.join(root, rel)); return p.startsWith(root) ? p : null; };
@@ -169,7 +191,9 @@ const server = http.createServer(async (req, res) => {
       }
       for (const pre of ["/files/", "/ready/", "/cover/", "/stories/"]) {
         if (p.startsWith(pre)) {
-          const f = safe(ASSETS, decodeURIComponent(p)); if (!f || !fs.existsSync(f)) { res.writeHead(404); return res.end("noch nicht synchronisiert"); }
+          const f = safe(ASSETS, decodeURIComponent(p));
+          if (f && !fs.existsSync(f)) await bildHolen(decodeURIComponent(p), f);
+          if (!f || !fs.existsSync(f)) { res.writeHead(404); return res.end("noch nicht synchronisiert"); }
           const st = fs.statSync(f), ext = path.extname(f).toLowerCase(), type = MIME[ext] || "application/octet-stream", range = req.headers.range;
           if (range && ext === ".mp4") { const [a, b] = range.replace("bytes=", "").split("-"); const s = Number(a), e = b ? Number(b) : st.size - 1; res.writeHead(206, { "Content-Range": `bytes ${s}-${e}/${st.size}`, "Accept-Ranges": "bytes", "Content-Length": e - s + 1, "Content-Type": type }); return fs.createReadStream(f, { start: s, end: e }).pipe(res); }
           res.writeHead(200, { "Content-Type": type, "Content-Length": st.size }); return fs.createReadStream(f).pipe(res);
