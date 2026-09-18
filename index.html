@@ -2252,7 +2252,9 @@ function vPlan(){
     const slots=(p.slots||{})[k]||[];const rs=(p.reels||[]).filter(r=>(r.when||'').startsWith(k)||r.tag===k);const rpk=rp.filter(e=>e.datum===k);
     // Anne 16.09.: eine Zeile oben am Tag sagt, was fuer diesen Wochentag vorgesehen ist (aus dem Postingplan)
     const rhythmus=(S.postingplan||[]).filter(e=>(e.tag||'').slice(0,2)===kurz);
-    const auf=(S.auftraege||[]).filter(a=>(a.datum||'')===k);
+    // Abgesagtes gehoert aus dem Kalender raus — Anne 18.09.: „reel aus dem plan entfernen
+    // funktioniert nicht". Es wurde abgesagt, blieb aber als graue Karte stehen.
+    const auf=(S.auftraege||[]).filter(a=>(a.datum||'')===k && a.status!=='abgesagt');
     return `<div class="day" ondragover="planUeber(event)" ondragleave="planRaus(event)" ondrop="planDrop(event,'${k}')"><b>${kurz} ${d.getDate()}.${d.getMonth()+1}.</b>
       ${rhythmus.length?`<div class="tagesplan">${rhythmus.map(e=>esc([e.wer,e.format,e.thema].filter(Boolean).join(' · '))).join('<br>')}</div>`:''}
       ${(()=>{const e=[];
