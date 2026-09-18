@@ -1414,7 +1414,7 @@ function vUeber(m){
     const storyZeilen=sr.liste.map(s=>`<tr onclick="nav('storyroh',{name:'${esc(s.name).replace(/'/g,"\\'")}'})" style="cursor:pointer"><td><b>${esc(s.name)}</b><br><small class="hint">${esc(s.quelle)}${s.einzeldatei?' · Einzeldatei':' · '+s.dateien+' Dateien'}</small></td>
       <td>${esc(zeitseit(s.mtime))}</td></tr>`).join('');
     const kacheln=arc?arc.bilder.map(b=>`<figure style="margin:0">
-      <a href="${b.url}" target="_blank"><img src="${b.url}" style="width:100%;border-radius:12px;border:1px solid var(--line);display:block"></a>
+      <a href="${b.url}" target="_blank"><img onerror="bildFehlt(this)" src="${b.url}" style="width:100%;border-radius:12px;border:1px solid var(--line);display:block"></a>
       <figcaption class="meta" style="margin-top:6px">${esc(b.slot)}</figcaption></figure>`).join(''):'';
 
     const hu=(d.heuteUploads&&d.heuteUploads.stories)||[];
@@ -1583,7 +1583,7 @@ function karListe(m,art){
       return xs.length?`<div class="sec"><h2>${t} <span class="pill">${xs.length}</span></h2>
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${xs.map(x=>`
         <div class="card">
-          ${x.bild?`<img src="${x.bild}" style="width:100%;border-radius:8px;display:block;margin-bottom:8px">`:'<div class="meta" style="font-size:12px;margin-bottom:8px">noch keine Seiten</div>'}
+          ${x.bild?`<img onerror="bildFehlt(this)" src="${x.bild}" style="width:100%;border-radius:8px;display:block;margin-bottom:8px">`:'<div class="meta" style="font-size:12px;margin-bottom:8px">noch keine Seiten</div>'}
           <b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
           <span class="meta" style="font-size:11px">${esc(KAR_ART[x.art]||x.art)}${x.slides?` · ${x.slides} Seiten`:''}${x.material?` · ${x.material} Material`:''}</span>
           ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto;margin-top:6px">${esc(x.notizen.slice(0,200))}</div>`:''}
@@ -1650,7 +1650,7 @@ function vKarussells(m){
       return xs.length?`<div class="sec"><h2>${titel} <span class="pill">${xs.length}</span></h2>
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${xs.map(x=>`
         <div class="card">
-          ${x.bild?`<img src="${x.bild}" style="width:100%;border-radius:8px;display:block;margin-bottom:8px">`:'<div class="meta" style="font-size:12px;margin-bottom:8px">noch keine Seiten</div>'}
+          ${x.bild?`<img onerror="bildFehlt(this)" src="${x.bild}" style="width:100%;border-radius:8px;display:block;margin-bottom:8px">`:'<div class="meta" style="font-size:12px;margin-bottom:8px">noch keine Seiten</div>'}
           <b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
           <span class="meta" style="font-size:11px">${esc(KAR_ART[x.art]||x.art)} · ${x.slides} Seiten${x.material?` · ${x.material} Material`:''}</span>
           ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto;margin-top:6px">${esc(x.notizen.slice(0,200))}</div>`:''}
@@ -1732,6 +1732,29 @@ function storyAendernSenden(name){
   document.getElementById('stAnwModal').remove();
   job(['story-anweisung',name],'Story ändern · '+name, {url:'/api/story-anweisung', body:{name, text:teile.join(', ')}});
 }
+// Online liegen nur die kleinen Web-Fassungen; die Originale gibt es ausschliesslich auf Annes Mac.
+// Zeigte das Tool trotzdem auf den Mac-Pfad, kam ein schwarzer Kasten ohne Erklaerung
+// (Anne 18.09.: „wo liegt gerade wieder das Problem, dass ich keine Videos sehen kann?").
+// Jetzt: entweder ein Video, das wirklich da ist — oder ein Satz, der sagt, woran es liegt.
+// Fehlt ein Bild (online meist: noch nicht hochgeladen), zeigt der Browser ein kaputtes Symbol.
+// Das sagt niemandem etwas — deshalb an seiner Stelle ein grauer Platz mit einem Satz.
+function bildFehlt(el){
+  if(el.dataset.weg) return; el.dataset.weg='1';
+  const d=document.createElement('div');
+  d.className='meta';
+  d.style.cssText='display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;background:var(--tint);border-radius:8px;padding:14px;min-height:60px';
+  d.textContent = window.HOSTED ? 'Bild wird noch übertragen' : 'Bild nicht gefunden';
+  el.replaceWith(d);
+}
+function videoFeld(d, base){
+  if(!d.dateien||!d.dateien.video) return '';
+  if(d.videoKlein) return `<video controls preload="metadata" src="${d.videoKlein}"></video>`;
+  if(!window.HOSTED) return `<video controls preload="metadata" src="${base}/render/reel.mp4?${d.mtime}"></video>`;
+  return `<div class="card" style="text-align:center;padding:22px">
+    <b style="display:block;font-size:14px">Web-Fassung wird noch übertragen</b>
+    <span class="meta" style="font-size:12px">Der Vorschnitt ist fertig — die kleine Fassung fürs Web lädt gerade hoch. In ein paar Minuten ist er hier abspielbar.</span>
+    <div class="row" style="justify-content:center;margin-top:10px"><button class="btn ghost" style="font-size:12px" onclick="render()">Neu laden</button></div></div>`;
+}
 function vKarussell(m){
   m.innerHTML='<h1>'+esc(cur.name||'')+'</h1><div id="kaBox">lädt …</div>';
   api('/api/karussell/'+encodeURIComponent(cur.name)).then(d=>{const b=$('#kaBox');if(!b)return;
@@ -1741,7 +1764,7 @@ function vKarussell(m){
       <span class="meta">${(d.slides||[]).length} Slides</span></div>
     <div class="grid" id="kaSlides" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">${(d.slides||[]).map((x,i)=>`
       <div class="card" draggable="true" data-n="${esc(x.name)}" ondragstart="kaZieht(event,'${esc(x.name)}')" ondragover="event.preventDefault()" ondrop="kaDrop(event,'${esc(x.name)}')" style="padding:8px;cursor:grab">
-        <img src="${x.url}" style="width:100%;border-radius:8px;display:block">
+        <img onerror="bildFehlt(this)" src="${x.url}" style="width:100%;border-radius:8px;display:block">
         <div class="row" style="justify-content:space-between;margin-top:6px"><span class="meta">${i+1}</span>
         <button class="btn ghost" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();kaLoeschen('${esc(x.name)}')">entfernen</button></div>
       </div>`).join('')}</div>
@@ -1788,7 +1811,7 @@ function vSession(){
     if(rb){const r=d.rohmaterial||[];
       rb.innerHTML=r.length?r.map(x=>x.video&&x.url
         ?`<div class="card" style="max-width:320px"><video src="${x.url}" controls preload="metadata" style="width:100%;border-radius:10px;background:#000"></video><div class="meta" style="margin-top:6px">${esc(x.name)} · ${Math.round(x.groesse/1e6)} MB · ${esc(x.mtime)}</div></div>`
-        :`<div class="card" style="max-width:320px">${x.url?`<img src="${x.url}" style="width:100%;border-radius:10px">`:''}<div class="meta" style="margin-top:6px">${esc(x.name)} · ${Math.round(x.groesse/1e6)} MB</div></div>`).join('')
+        :`<div class="card" style="max-width:320px">${x.url?`<img onerror="bildFehlt(this)" src="${x.url}" style="width:100%;border-radius:10px">`:''}<div class="meta" style="margin-top:6px">${esc(x.name)} · ${Math.round(x.groesse/1e6)} MB</div></div>`).join('')
         :'<p class="meta">Liegt nicht auf diesem Rechner.</p>'}
     const box=$('#kand');if(!box)return;
     const ks=(d.kandidaten?.kandidaten||[]);
@@ -1847,14 +1870,14 @@ async function vReel(m){
     <button class="btn ghost" onclick="job(['capcut-paket','${esc(dir)}'],'CapCut-Paket bauen')">CapCut-Paket bauen</button>
     ${window.HOSTED?'':`<a class="btn ghost" style="text-decoration:none" href="${base}/capcut-draft-paket.zip" download>Paket laden</a>`}</div>
   <div class="two"><div>
-    ${d.dateien.video?`<video controls preload="metadata" src="${d.videoKlein||(base+'/render/reel.mp4?'+d.mtime)}"></video>`:''}
+    ${videoFeld(d, base)}
     <div class="sec"><h2>Schnitt · Etappe 1</h2><div id="schnitt" class="meta">lädt …</div></div>
     ${v?`<div class="sec"><h2>Viral-Check</h2><div class="score"><div class="ring" style="--v:${v.score}"><span>${v.score}</span></div><div><b>${v.ueber_schwelle?'über':'unter'} Schwelle ${v.schwelle}</b><br><small class="hint">Heuristik ${v.teile?.heuristik??'–'} · Jury ${v.teile?.jury??'–'} · Korridor Median ${v.teile?.korridor?.konto_median_plays??'–'} Plays</small></div></div>
       ${(v.gruende||[]).length?'<ul style="margin:10px 0 0 18px;font-size:14px">'+v.gruende.map(g=>'<li>'+esc(g)+'</li>').join('')+'</ul>':''}
       ${(v.verbesserungen||[]).length?'<div class="sec"><h2>Verbesserungen</h2><ul style="margin-left:18px;font-size:14px">'+v.verbesserungen.map(g=>'<li>'+esc(g)+'</li>').join('')+'</ul></div>':''}</div>`:''}
     ${d.kpiFull?`<div class="sec"><h2>KPI nach dem Posten</h2><table><tr><th>Plays</th><th>Likes</th><th>Kommentare</th><th>Saves</th><th>Prognose</th></tr><tr><td>${d.kpiFull.plays??'–'}</td><td>${d.kpiFull.likes??'–'}</td><td>${d.kpiFull.kommentare??'–'}</td><td>${d.kpiFull.saves??'–'}</td><td>${v?v.score:'–'}</td></tr></table></div>`:''}
   </div><div>
-    ${d.dateien.kontaktbogen?`<img class="kb" src="${base}/qa/kontaktbogen.jpg?${d.mtime}" alt="Kontaktbogen">`:''}
+    ${d.dateien.kontaktbogen?`<img class="kb" src="${base}/qa/kontaktbogen.jpg?${d.mtime}" alt="Kontaktbogen" onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'meta',style:'font-size:12px',textContent:'Kontaktbogen wird noch übertragen'}))">`:''}
     <div class="sec"><h2>Änderung anweisen</h2><div class="card">
       <textarea id="anwText" style="min-height:90px" placeholder="z. B. Untertitel passen nicht · CTA-Banner am Ende weg · Anfang verhaspelt, sauber schneiden"></textarea>
       <div class="row" style="margin-top:10px;gap:8px;align-items:center">
@@ -1864,7 +1887,7 @@ async function vReel(m){
       <div id="anwListe" style="margin-top:12px"></div>
       ${(()=>{setTimeout(()=>anweisungenLaden('${esc(dir)}'),200);return ''})()}
     </div></div>
-    ${d.dateien.sfx?`<img class="kb" style="margin-top:10px" src="${base}/qa/sfx.png?${d.mtime}" alt="SFX-Kurve">`:''}
+    ${d.dateien.sfx?`<img onerror="bildFehlt(this)" class="kb" style="margin-top:10px" src="${base}/qa/sfx.png?${d.mtime}" alt="SFX-Kurve">`:''}
     <div class="sec"><h2>Captions bearbeiten</h2><div id="capedit" class="meta">lädt …</div></div>
     <div class="sec"><h2>Redaktion (reel.json)</h2><textarea id="reeljson">${esc(JSON.stringify(d.reel,null,1))}</textarea>
       <div class="row" style="margin-top:8px"><button class="btn ghost" onclick="saveReel()">Speichern</button><button class="btn ghost" onclick="job(['validate','${esc(dir)}'],'Validieren')">Validieren</button></div></div>
@@ -2083,8 +2106,8 @@ function matAnsehen(id){
     ? `<video src="${x.video}" controls preload="metadata" playsinline style="width:auto;max-width:100%;max-height:42vh;border-radius:12px;background:#000;display:block;margin:0 auto"></video>`
     : (x.dateien||[]).map(f=>/\.(mp4|mov|m4v)$/i.test(f)
         ? `<video src="${u(f)}" controls preload="metadata" playsinline style="width:auto;max-width:100%;max-height:42vh;border-radius:12px;background:#000;display:block;margin:0 auto"></video>`
-        : `<img src="${u(f)}" style="width:100%;border-radius:10px;display:block;margin-bottom:8px">`).join('');
-  const cov = x.coverBild ? `<div class="sec"><h2>Cover</h2><img src="${x.coverBild}" style="width:180px;border-radius:10px;display:block"></div>` : '';
+        : `<img onerror="bildFehlt(this)" src="${u(f)}" style="width:100%;border-radius:10px;display:block;margin-bottom:8px">`).join('');
+  const cov = x.coverBild ? `<div class="sec"><h2>Cover</h2><img onerror="bildFehlt(this)" src="${x.coverBild}" style="width:180px;border-radius:10px;display:block"></div>` : '';
   const d=document.createElement('div'); d.className='fenster'; d.id='matModal';
   d.innerHTML=`<div class="box" style="width:min(560px,94vw);max-height:88vh;overflow:auto">
     <div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:20px;margin:0">${esc(x.titel||x.id)}</h2>
@@ -2173,7 +2196,7 @@ function planEintrag(unter){
   const tage=[...Array(21)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d.toISOString().slice(0,10)});
   const zeiten=SLOTS.includes(a.uhrzeit)?SLOTS:[a.uhrzeit,...SLOTS];
   const schau = m && m.video ? `<video src="${m.video}" controls preload="metadata" playsinline style="width:100%;max-height:46vh;border-radius:12px;background:#000"></video>`
-              : m && (m.coverBild||m.bild) ? `<img src="${m.coverBild||m.bild}" style="width:170px;border-radius:10px;display:block">` : '';
+              : m && (m.coverBild||m.bild) ? `<img onerror="bildFehlt(this)" src="${m.coverBild||m.bild}" style="width:170px;border-radius:10px;display:block">` : '';
   const d=document.createElement('div'); d.className='fenster'; d.id='peModal';
   d.innerHTML=`<div class="box" style="width:min(600px,94vw);max-height:88vh;overflow:auto">
     <div class="row" style="justify-content:space-between;align-items:baseline">
@@ -2233,9 +2256,9 @@ function vPlan(){
     if(!m.length){box.innerHTML='<p class="meta">lädt …</p>';return}
     const heute=fmt(new Date());
     const gruppen=[['Reel','Reels'],['Karussell','Karussells'],['Story','Storys']];
-    const vorschau=(x)=>{if(x.coverBild||x.bild)return `<img src="${x.coverBild||x.bild}" alt="">`;
+    const vorschau=(x)=>{if(x.coverBild||x.bild)return `<img onerror="bildFehlt(this)" src="${x.coverBild||x.bild}" alt="">`;
       const f=(x.dateien||[])[0]||'';const u='/datei?p='+encodeURIComponent(f);
-      return /\.(mp4|mov|m4v)$/i.test(f)?`<video src="${u}" preload="metadata" muted></video>`:`<img src="${u}" alt="">`};
+      return /\.(mp4|mov|m4v)$/i.test(f)?`<video src="${u}" preload="metadata" muted></video>`:`<img onerror="bildFehlt(this)" src="${u}" alt="">`};
     const leer={'Reel':['Reels','karFrei','Kein freigegebenes Reel'],'Karussell':['Karussells','karFrei','Kein freigegebenes Karussell — zur Freigabe geht es hier'],'Story':['Storys','storyFrei','Keine freigegebene Story — zur Freigabe geht es hier']};
     box.innerHTML=gruppen.map(([typ,titel])=>{const xs=m.filter(x=>x.typ===typ);
       // Alle drei Arten bleiben sichtbar, auch wenn eine gerade leer ist (Anne 17.09.)
