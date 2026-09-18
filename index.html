@@ -1663,7 +1663,7 @@ function vKarussells(m){
 }
 function ksFreigeben(name){
   post('/api/karussell/'+encodeURIComponent(name),{freigeben:true})
-    .then(()=>{toast('✓ freigegeben — steht im Contentplan');MATERIAL=null;vKarussells($('#main'))})}
+    .then(()=>{toast('✓ freigegeben — steht im Contentplan');MATERIAL=null;materialFrisch(true);vKarussells($('#main'))})}
 
 // Eigene Seite fuer Storys: Rohmaterial -> untertitelt (zur Pruefung) -> freigegeben
 function vStorys(m){
@@ -1690,7 +1690,7 @@ function vStorys(m){
 function stFreigeben(name){
   post('/api/story-freigeben',{name}).then(r=>{
     if(r.error)return toast(r.error);
-    toast('✓ freigegeben — steht im Contentplan');MATERIAL=null;vStorys($('#main'))})}
+    toast('✓ freigegeben — steht im Contentplan');MATERIAL=null;materialFrisch(true);vStorys($('#main'))})}
 // Aenderungswuensche zu einer Story. Anne 17.09.: „Dafuer kannst du mir gerne hier noch ein Tool
 // einbauen, dass ich da einfach einen Regler habe zum Verschieben. Ansonsten wird in den Storys
 // nichts geschnitten." Genau darum kann dieses Fenster nur: trimmen, Untertitel neu, zurueck an Nico.
@@ -2018,7 +2018,16 @@ function rpZeileNeu(){const t=$('#rpTab');const d=new Date();d.setDate(d.getDate
 async function rpSpeichern(){const rows=[...document.querySelectorAll('#rpTab tr.rpRow')].map(tr=>{const o={};tr.querySelectorAll('[data-k]').forEach(el=>o[el.dataset.k]=el.value);const alt=(S.redaktionsplan||[]).find(e=>e.datum===o.datum&&e.thema===o.thema);if(alt&&alt.reel)o.reel=alt.reel;return o}).filter(o=>o.datum||o.thema);
   const r=await fetch('/api/redaktionsplan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan:rows})}).then(r=>r.json());
   $('#rpStatus').textContent=r.ok?'✓ gespeichert ('+r.n+' Einträge)':'Fehler'; S.redaktionsplan=rows; setTimeout(load,300)}
-let MATERIAL=null;
+let MATERIAL=null, MATERIAL_ZEIT=0;
+// Die Materialliste wurde einmal geladen und dann behalten. Online kommt sie aus dem Schnappschuss,
+// der erst eine Minute spaeter nachzieht — wer direkt nach dem Freigeben in den Contentplan ging,
+// bekam die alte Liste und sah seine Story nicht (Anne 18.09.: „habe auf Freigeben gedrueckt und
+// kann trotzdem nicht einplanen"). Deshalb: aelter als 20 Sekunden -> neu holen.
+async function materialFrisch(erzwingen){
+  if(!erzwingen && MATERIAL && Date.now()-MATERIAL_ZEIT < 20000) return MATERIAL;
+  try{ const d=await api('/api/material'); if(Array.isArray(d.material)){ MATERIAL=d.material; MATERIAL_ZEIT=Date.now(); } }catch(e){}
+  return MATERIAL||[];
+}
 function ppZeile(e){const inp=(k,v,w)=>`<input data-k="${k}" value="${esc(v||'')}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px;width:${w||'100%'}">`;
   return `<tr class="ppRow"><td><select data-k="tag" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px">${['Mo','Di','Mi','Do','Fr','Sa','So'].map(t=>`<option ${t===e.tag?'selected':''}>${t}</option>`).join('')}</select></td><td>${inp('wer',e.wer,'110px')}</td><td>${inp('format',e.format,'150px')}</td><td>${inp('thema',e.thema)}</td><td><button class="btn ghost" style="padding:4px 8px" onclick="this.closest('tr').remove()">✕</button></td></tr>`}
 function ppZeileNeu(){$('#ppTab').insertAdjacentHTML('beforeend',ppZeile({tag:'Mo'}))}
@@ -2042,11 +2051,7 @@ async function planEinplanen(datum, zeit, matId){
   // Anne 17.09.: „wenn ich im contentplan auf eine uhrzeit drücke passiert nichts." Ursache: die
   // Materialliste war beim Klick noch nicht geladen, und statt zu warten kam nur eine Meldung.
   // Jetzt wird nachgeladen und der Dialog danach geöffnet.
-  if(!(MATERIAL||[]).length){
-    toast('Material wird geladen …',1500);
-    try{const d=await api('/api/material'); MATERIAL=d.material||[]}catch(e){}
-  }
-  const m=MATERIAL||[];
+  const m=await materialFrisch();
   if(!m.length){alert('Es ist noch kein freigegebenes Material da, das eingeplant werden könnte.\n\nKarussells und Storys müssen erst in ihrer Freigabe-Seite freigegeben werden.');return}
   const slots=['08:00','11:30','14:00','17:00','20:00'];
   if(zeit&&!slots.includes(zeit))slots.unshift(zeit);
@@ -2213,10 +2218,11 @@ function planModalOk(){
   planModalZu(); job(['einplanen',id,datum,'--uhrzeit',zeit],'Einplanen am '+datum+' um '+zeit);
 }
 function vPlan(){
-  if(!(MATERIAL||[]).length){api('/api/material').then(d=>{
-    if(Array.isArray(d.material)&&d.material.length){MATERIAL=d.material;
-      if(view==='plan'){render();setTimeout(()=>window.matRender&&window.matRender(),80)}}
-  }).catch(()=>{})}
+  // Beim Betreten des Contentplans immer nachsehen, ob inzwischen etwas freigegeben wurde.
+  const vorher=(MATERIAL||[]).length;
+  materialFrisch(true).then((xs)=>{
+    if(view==='plan' && (xs.length!==vorher || !vorher)){render();setTimeout(()=>window.matRender&&window.matRender(),80)}
+  }).catch(()=>{});
   // Anne 14.09.: Contentplan = Kalender + Redaktionsplan + ALLE freigegebenen Reels (CapCut-Export = freigegeben). Kein Reiter „Freigegeben" mehr.
   const p=S.plan||{slots:{},reels:[]}; const days=[...Array(7)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d});
   const rp=S.redaktionsplan||[];
