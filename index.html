@@ -1079,7 +1079,35 @@ const esc=(s)=>String(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>'
 const LADDER=['neu','ingest','transkript','kandidaten','reels','gerendert','qa','viral-ok','freigegeben','bereit','auftrag','geplant','gepostet','kpi'];
 const LABEL={neu:'neu',ingest:'eingelesen',transkript:'Transkript',kandidaten:'Kandidaten',reels:'Reels in Arbeit',angelegt:'angelegt',gerendert:'gerendert',qa:'QA PASS',nachbessern:'nachbessern','viral-ok':'Viral ≥ Schwelle',freigegeben:'freigegeben',bereit:'bereit zum Posten',auftrag:'Einplan-Auftrag (wartet auf Claude-Routine)',geplant:'in Metricool geplant',gepostet:'gepostet',kpi:'KPI ausgewertet'};
 let S=null, view='ueber', cur={session:null,slug:null}, timers=[];
-const api=async(p,o)=>{const r=await fetch(p,o);return r.json()};
+// Faellt die Anmeldung weg (Spiegel neu gestartet, Fenster zu lange offen), antwortet der Server
+// auf JEDEN Aufruf mit der Login-Seite. Vorher lief das in einen JSON-Fehler, den niemand sah: die
+// Oberflaeche stand da und kein Klick tat mehr etwas (Anne 21.09.: „Egal wo ich draufdruecken will,
+// nichts reagiert."). Jetzt wird das erkannt und gesagt.
+let ABGEMELDET=false;
+function abmeldungZeigen(){
+  if(ABGEMELDET)return; ABGEMELDET=true;
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(16,26,46,.55);display:flex;'
+    +'align-items:center;justify-content:center';
+  d.innerHTML='<div style="background:#fff;border-radius:16px;padding:34px 38px;max-width:420px;'
+    +'text-align:center;font-family:Jost,system-ui,sans-serif">'
+    +'<b style="display:block;font-size:19px;margin-bottom:10px">Anmeldung abgelaufen</b>'
+    +'<span style="font-size:14px;color:#47536a;display:block;margin-bottom:18px">Deshalb reagiert '
+    +'gerade kein Knopf. Einmal neu laden und das Passwort wieder eingeben — deine Daten sind alle da.</span>'
+    +'<button style="font:inherit;font-size:15px;padding:10px 22px;border-radius:999px;border:0;'
+    +'background:#101a2e;color:#fff;cursor:pointer" onclick="location.reload()">Neu laden</button></div>';
+  document.body.appendChild(d);
+}
+const api=async(p,o)=>{
+  const r=await fetch(p,o);
+  if(r.status===401){abmeldungZeigen();throw new Error('nicht angemeldet')}
+  const t=await r.text();
+  try{return JSON.parse(t)}
+  catch(e){
+    if(/^\s*</.test(t)||/login/i.test(t.slice(0,40))){abmeldungZeigen();throw new Error('nicht angemeldet')}
+    throw e;
+  }
+};
 const post=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
 // ---------- Aufträge: was läuft, was fertig ist, mit Ergebnis und vollem Protokoll ----------
 function zeit(iso){if(!iso)return '';const d=new Date(iso);return d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}
