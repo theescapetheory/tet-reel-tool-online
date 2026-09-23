@@ -58,7 +58,10 @@ standHolen();
 // (Anne 18.09.: „karusselbilder werden nicht angezeigt"). Nur Bilder, nur einmal je Datei.
 const bilderVersucht = new Set();
 async function bildHolen(rel, ziel) {
-  if (!STAND_TOKEN || !/\.(jpg|jpeg|png|webp)$/i.test(rel) || bilderVersucht.has(rel)) return false;
+  // 23.09.2026: mp4 gehoert dazu. Render Free hat keine dauerhafte Festplatte — nach jedem Neustart
+  // ist DATA_DIR leer. Bilder kamen ueber diesen Weg sofort zurueck, Storys blieben schwarz, weil
+  // Videos hier ausgeschlossen waren. Bis der Abgleich alles nachgeladen hat, vergehen Stunden.
+  if (!STAND_TOKEN || !/\.(jpg|jpeg|png|webp|mp4)$/i.test(rel) || bilderVersucht.has(rel)) return false;
   bilderVersucht.add(rel);
   try {
     const url = `https://api.github.com/repos/${STAND_REPO}/contents/assets` +
