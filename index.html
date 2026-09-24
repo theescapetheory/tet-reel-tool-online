@@ -1590,9 +1590,324 @@ function vUpload(m){
   return '';
 }
 function vStudio(m){
-  m.innerHTML=`<h1>Schnittstudio</h1>
-    <div class="card"><p style="margin:0;font-size:15px">Kommt demnächst. Bis dahin läuft der Feinschnitt in CapCut —
-    Export dort gilt als Freigabe und landet automatisch im Contentplan.</p></div>`;
+  const F=n=>`studio-demo/frame-${n}.jpg`;
+  const kf=a=>(a||[]).map(x=>`<i class="kf" style="left:${x}%"></i>`).join('');
+  const vclip=(l,w,t,img,k,fx)=>`<div class="tlc v" style="left:${l}%;width:${w}%"><img src="${img}" alt=""><span>${t}</span>${fx?`<em>${fx}</em>`:''}${kf(k)}<b class="gl l"></b><b class="gl r"></b></div>`;
+  const meter=(h1,h2)=>`<div class="pegel"><i style="height:${h1}%"></i><i style="height:${h2}%"></i></div>`;
+  const welle=n=>Array.from({length:n},(_,i)=>`<b style="height:${28+Math.round(46*Math.abs(Math.sin(i*0.7)+0.35*Math.sin(i*2.3)))}%"></b>`).join('');
+  m.innerHTML=`
+  <style>
+    .st{--h:var(--hair);--h2:var(--hair2);--t:var(--tint);--a:var(--accent);--y:var(--yellow)}
+    .stleiste{display:flex;align-items:center;gap:6px;background:var(--white);border:1px solid var(--h);border-radius:10px;padding:6px 8px;margin-bottom:10px;flex-wrap:wrap}
+    .stleiste .wz{display:flex;gap:3px;padding-right:8px;border-right:1px solid var(--h2)}
+    .stleiste .wz span{width:30px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--body);cursor:default}
+    .stleiste .wz span.an{background:var(--ink);color:#fff}
+    .stleiste .gr{font-size:11px;color:var(--slate);padding:0 8px;border-right:1px solid var(--h2)}
+    .stleiste .gr b{color:var(--ink)}
+    .stArb{display:grid;grid-template-columns:236px 1fr 296px;gap:10px;align-items:stretch}
+    .stSp{background:var(--white);border:1px solid var(--h);border-radius:12px;padding:0;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+    .stTabs{display:flex;border-bottom:1px solid var(--h2);background:var(--t)}
+    .stTabs button{flex:1;padding:9px 2px;border:0;background:none;font:inherit;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);border-bottom:2px solid transparent}
+    .stTabs button.an{color:var(--ink);background:var(--white);border-bottom-color:var(--a)}
+    .stBody{padding:11px;overflow:hidden}
+    .stSuch{display:flex;align-items:center;gap:6px;background:var(--t);border-radius:7px;padding:5px 8px;font-size:11.5px;color:var(--slate);margin-bottom:9px}
+    .stH{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate);margin:0 0 8px;font-weight:700}
+    .stMed{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .stMed div{position:relative;aspect-ratio:9/16;border-radius:6px;overflow:hidden;border:2px solid transparent;background:var(--t)}
+    .stMed div.an{border-color:var(--a)}
+    .stMed img{width:100%;height:100%;object-fit:cover;display:block}
+    .stMed span{position:absolute;left:3px;bottom:3px;background:rgba(26,26,26,.8);color:#fff;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px}
+    .stMed u{position:absolute;right:3px;top:3px;background:var(--y);color:var(--ink);font-size:8px;font-weight:800;padding:1px 4px;border-radius:3px;text-decoration:none}
+    .stBau div{font-size:11.5px;color:var(--body);padding:4px 0;display:flex;align-items:center;gap:7px}
+    .stBau i{width:8px;height:8px;border-radius:2px;flex:none}
+    .stUeb{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+    .stUeb div{background:var(--t);border-radius:6px;padding:7px 2px;text-align:center;font-size:9.5px;font-weight:700;color:var(--body);text-transform:uppercase}
+
+    .stMitte{display:flex;flex-direction:column;gap:8px;min-width:0}
+    .stVor{background:var(--t);border:1px solid var(--h);border-radius:12px;padding:10px;display:flex;flex-direction:column;align-items:center;gap:8px}
+    .stChips{display:flex;gap:5px;flex-wrap:wrap;align-self:stretch;align-items:center}
+    .stChips span{background:var(--white);border:1px solid var(--h);border-radius:99px;padding:3px 9px;font-size:10.5px;color:var(--slate)}
+    .stChips span.gelb{background:var(--y);border-color:var(--y);color:var(--ink);font-weight:700}
+    .stBuehne{display:flex;gap:10px;align-items:stretch}
+    .stPhone{position:relative;width:216px;aspect-ratio:9/16;border-radius:11px;overflow:hidden;background:#000;box-shadow:0 16px 36px -20px rgba(26,26,26,.55);flex:none}
+    .stPhone img{width:100%;height:100%;object-fit:cover;display:block}
+    .stHook{position:absolute;left:7%;right:7%;top:8%;background:rgba(26,26,26,.87);border-left:4px solid var(--y);border-radius:8px;padding:7px 9px;color:#fff;font-weight:800;font-size:11px;line-height:1.18;text-transform:uppercase}
+    .stUt{position:absolute;left:6%;right:6%;bottom:11%;text-align:center;font-weight:900;font-size:14px;line-height:1.1;color:#fff;text-transform:uppercase;text-shadow:0 2px 0 #1a1a1a,0 0 12px rgba(0,0,0,.6)}
+    .stUt em{font-style:normal;background:var(--y);color:var(--ink);padding:0 .12em;border-radius:3px}
+    .stSafe{position:absolute;inset:7% 5%;border:1px dashed rgba(255,255,255,.24);border-radius:5px}
+    .stGriffe b{position:absolute;width:9px;height:9px;border:1.5px solid var(--y);background:rgba(0,0,0,.35)}
+    .stSkop{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+    .stSkop .kasten{background:var(--white);border:1px solid var(--h);border-radius:9px;padding:8px 10px}
+    .stSkop .kasten h5{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate);margin:0 0 7px;font-weight:700}
+    .pegelR{display:flex;gap:9px;align-items:flex-end;height:74px}
+    .pegel{display:flex;gap:2px;align-items:flex-end;height:100%}
+    .pegel i{width:7px;background:linear-gradient(to top,#2F7D55 0 58%,#FDDF5B 58% 82%,#C2491F 82% 100%);border-radius:2px;align-self:flex-end}
+    .pegelS{display:flex;flex-direction:column;justify-content:space-between;font-size:8.5px;color:var(--slate);height:74px}
+    .vekt{display:flex;gap:8px}
+    .vekt div{flex:1;aspect-ratio:1;border-radius:50%;background:conic-gradient(#C2491F,#FDDF5B,#2F7D55,#3E86C4,#7A4F7F,#C2491F);position:relative;opacity:.9}
+    .vekt div::after{content:"";position:absolute;inset:26%;border-radius:50%;background:var(--white)}
+    .vekt div::before{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+    .stTrans{display:flex;align-items:center;gap:12px;color:var(--slate);font-size:12.5px;align-self:stretch;justify-content:center}
+    .stTrans b{width:32px;height:32px;border-radius:50%;background:var(--y);color:var(--ink);display:flex;align-items:center;justify-content:center;font-size:13px}
+    .stTrans .tc{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:700}
+
+    .stIns{background:var(--white);border:1px solid var(--h);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+    .stStile{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+    .stStile div{border:2px solid var(--h);border-radius:8px;padding:8px 4px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;background:var(--ink);color:#fff}
+    .stStile div.an{border-color:var(--a)}
+    .stStile div em{font-style:normal;background:var(--y);color:var(--ink);padding:0 3px;border-radius:2px}
+    .stReg{display:grid;gap:8px;margin-bottom:12px}
+    .stReg .z{display:flex;justify-content:space-between;font-size:11.5px;color:var(--body)}
+    .stReg .z b{color:var(--ink)}
+    .stReg .z u{text-decoration:none;color:var(--a);font-size:10px;margin-left:5px}
+    .stBahn{height:5px;border-radius:3px;background:var(--h);position:relative}
+    .stBahn i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--a)}
+    .stBahn u{position:absolute;top:50%;transform:translate(-50%,-50%);width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid var(--a)}
+    .stRaeder{display:flex;gap:7px;margin-bottom:12px}
+    .stRad{flex:1;text-align:center}
+    .stRad .r{aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 50% 50%,#fff 12%,transparent 13%),conic-gradient(#C2491F,#FDDF5B,#2F7D55,#3E86C4,#7A4F7F,#C2491F);position:relative;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)}
+    .stRad .r::after{content:"";position:absolute;width:9px;height:9px;border-radius:50%;background:#fff;border:1.5px solid var(--ink);top:38%;left:56%}
+    .stRad span{display:block;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);margin-top:5px;font-weight:700}
+    .stKurve{height:78px;background:var(--t);border-radius:8px;position:relative;margin-bottom:12px;overflow:hidden}
+    .stGit{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:12px}
+    .stGit div{border:1px solid var(--h);border-radius:7px;padding:7px 2px;text-align:center;font-size:9.5px;font-weight:700;color:var(--body);text-transform:uppercase}
+    .stGit div.an{background:var(--water);border-color:var(--water);color:var(--ink)}
+    .stSch{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:11.5px;color:var(--body);border-bottom:1px solid var(--h2)}
+    .stSch:last-child{border-bottom:0}
+    .stSw{width:31px;height:17px;border-radius:99px;background:var(--h);position:relative;flex:none}
+    .stSw::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+    .stSw.an{background:var(--a)}.stSw.an::after{left:16px}
+
+    .stTl{margin-top:10px;background:var(--white);border:1px solid var(--h);border-radius:12px;overflow:hidden}
+    .stTlK{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--h2);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);font-weight:700}
+    .stTlK .w{margin-left:auto;display:flex;gap:5px;text-transform:none;letter-spacing:0;align-items:center}
+    .stTlK .w span{background:var(--t);border-radius:6px;padding:4px 8px;font-size:10.5px;color:var(--body);font-weight:600}
+    .stTlK .w span.an{background:var(--y);color:var(--ink)}
+    .stZoom{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--slate)}
+    .stZoom .bz{width:74px;height:4px;border-radius:2px;background:var(--h);position:relative}
+    .stZoom .bz i{position:absolute;left:0;top:0;bottom:0;width:62%;background:var(--a);border-radius:2px}
+    .stLin{height:22px;position:relative;margin-left:104px;border-bottom:1px solid var(--h2);background:var(--t)}
+    .stLin span{position:absolute;top:4px;font-size:9px;color:var(--slate);font-variant-numeric:tabular-nums}
+    .stLin i{position:absolute;top:0;bottom:0;width:1px;background:var(--h)}
+    .stLin .mk{position:absolute;top:3px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--a)}
+    .stLin .io{position:absolute;top:0;bottom:0;background:rgba(255,116,72,.12);border-left:2px solid var(--a);border-right:2px solid var(--a)}
+    .stSpur{display:flex;height:40px;border-bottom:1px solid var(--h2)}
+    .stSpur:last-child{border-bottom:0}
+    .stSpur .n{width:104px;flex:none;display:flex;align-items:center;gap:5px;padding:0 9px;font-size:10px;font-weight:700;color:var(--slate);text-transform:uppercase;background:var(--t)}
+    .stSpur .n em{font-style:normal;margin-left:auto;display:flex;gap:4px;font-size:9px;color:var(--slate)}
+    .stSpur .b{flex:1;position:relative;background:repeating-linear-gradient(90deg,transparent 0 12.5%,var(--h2) 12.5% calc(12.5% + 1px))}
+    .tlc{position:absolute;top:4px;bottom:4px;border-radius:5px;display:flex;align-items:center;padding:0 7px;font-size:10px;font-weight:700;color:#fff;overflow:hidden;white-space:nowrap;box-shadow:0 1px 3px rgba(26,26,26,.18)}
+    .tlc img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.5}
+    .tlc span{position:relative;z-index:1}
+    .tlc em{position:relative;z-index:1;font-style:normal;margin-left:6px;background:rgba(255,255,255,.28);border-radius:3px;padding:1px 4px;font-size:8.5px}
+    .tlc.v{background:#4b6d8f}.tlc.t{background:#5a4f8a}.tlc.g{background:#2f7d6f}.tlc.m{background:#a1663a}.tlc.s{background:#7a4f7f}
+    .tlc .kf{position:absolute;top:50%;width:7px;height:7px;background:var(--y);transform:translate(-50%,-50%) rotate(45deg);z-index:2}
+    .tlc .gl{position:absolute;top:0;bottom:0;width:4px;background:rgba(255,255,255,.4)}
+    .tlc .gl.l{left:0}.tlc .gl.r{right:0}
+    .tlw{position:absolute;left:0;right:0;bottom:3px;height:16px;display:flex;align-items:flex-end;gap:1px;padding:0 7px;opacity:.7;z-index:1}
+    .tlw b{flex:1;background:#ffe2b0;border-radius:1px}
+    .stKopf{position:absolute;top:0;bottom:0;left:31%;width:2px;background:var(--a);z-index:6}
+    .stKopf::before{content:"";position:absolute;top:-5px;left:-6px;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid var(--a)}
+    .stUeg{position:absolute;top:4px;bottom:4px;width:16px;background:repeating-linear-gradient(45deg,var(--ink) 0 3px,#fff 3px 6px);opacity:.75;border-radius:3px;z-index:3}
+    .stFuss{display:flex;align-items:center;gap:14px;padding:8px 12px;border-top:1px solid var(--h2);font-size:11px;color:var(--slate);background:var(--t)}
+    .stFuss b{color:var(--ink)}
+    .stFuss .re{margin-left:auto;display:flex;gap:12px;align-items:center}
+    @media(max-width:1250px){.stArb{grid-template-columns:1fr}}
+  </style>
+  <div class="st">
+  <h1>Schnittstudio</h1>
+
+  <div class="stleiste">
+    <div class="wz"><span class="an">▤</span><span>✂</span><span>✋</span><span>🔍</span><span>T</span><span>◐</span><span>◇</span></div>
+    <div class="gr"><b>reel-AlexZahlen-2026-09-24</b> · 9:16 · 00:38</div>
+    <div class="gr">14 Schnitte · 41 Untertitel · 5 Grafiken</div>
+    <div class="gr" style="border:0">Projekt gespeichert <b>gerade eben</b></div>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <button class="btn ghost" style="font-size:11.5px;padding:6px 11px">Untertitel neu</button>
+      <button class="btn ghost" style="font-size:11.5px;padding:6px 11px">In CapCut öffnen</button>
+      <button class="btn" style="font-size:11.5px;padding:6px 11px">Zur Freigabe →</button>
+    </div>
+  </div>
+
+  <div class="stArb">
+
+    <div class="stSp">
+      <div class="stTabs"><button class="an">Medien</button><button>Text</button><button>Effekte</button><button>Audio</button><button>Übergänge</button></div>
+      <div class="stBody">
+        <div class="stSuch">🔍 in dieser Session suchen …</div>
+        <h4 class="stH">Aus dieser Session · 6</h4>
+        <div class="stMed">
+          <div class="an"><img src="${F(1)}"><span>00:12</span><u>A</u></div>
+          <div><img src="${F(2)}"><span>00:31</span></div>
+          <div><img src="${F(3)}"><span>01:04</span><u>A</u></div>
+          <div><img src="${F(4)}"><span>01:47</span></div>
+          <div><img src="${F(5)}"><span>02:09</span></div>
+          <div><img src="${F(6)}"><span>02:52</span></div>
+        </div>
+        <h4 class="stH" style="margin-top:13px">Marken-Bausteine</h4>
+        <div class="stBau">
+          <div><i style="background:#FDDF5B"></i>Hook-Box (TET)</div>
+          <div><i style="background:#FF7448"></i>Endcard „Kommentiere 222“</div>
+          <div><i style="background:#BFD7E8"></i>Q&amp;A-Tafel</div>
+          <div><i style="background:#2f7d6f"></i>Zahlen-Overlay</div>
+          <div><i style="background:#a1663a"></i>Sound-Bett „calm“</div>
+        </div>
+        <h4 class="stH" style="margin-top:13px">Übergänge</h4>
+        <div class="stUeb"><div>Cut</div><div>Whip</div><div>Fade</div><div>Zoom</div><div>Glitch</div><div>Slide</div></div>
+      </div>
+    </div>
+
+    <div class="stMitte">
+      <div class="stVor">
+        <div class="stChips">
+          <span>1080 × 1920</span><span>Stufe-3-Look</span><span>−14 LUFS</span><span class="gelb">Safe-Areas an</span>
+          <span style="margin-left:auto">Qualität ½</span><span>Zoom 68 %</span>
+        </div>
+        <div class="stBuehne">
+          <div class="stPhone">
+            <img src="${F(1)}" alt="Vorschau">
+            <div class="stSafe"></div>
+            <div class="stHook">Zwei Zahlen entscheiden, ob dein Business skaliert.</div>
+            <div class="stUt">…und genau <em>die</em> kennt fast keiner</div>
+            <div class="stGriffe"><b style="left:6%;top:7%"></b><b style="right:6%;top:7%"></b><b style="left:6%;bottom:7%"></b><b style="right:6%;bottom:7%"></b></div>
+          </div>
+          <div class="stSkop">
+            <div class="kasten">
+              <h5>Pegel · Stimme / Musik</h5>
+              <div class="pegelR">
+                ${meter(78,71)}${meter(54,49)}
+                <div class="pegelS"><span>0</span><span>−6</span><span>−18</span><span>−40</span></div>
+                <div style="flex:1;font-size:10.5px;color:var(--slate);line-height:1.5">
+                  Spitze <b style="color:var(--ink)">−1,8 dB</b><br>Integriert <b style="color:var(--ink)">−14,0 LUFS</b><br>Dynamik <b style="color:var(--ink)">8,4 LU</b>
+                </div>
+              </div>
+            </div>
+            <div class="kasten">
+              <h5>Bild · Vektor / Waveform</h5>
+              <div class="vekt"><div></div><div style="background:linear-gradient(to top,#1A1A1A,#BFD7E8);border-radius:6px;aspect-ratio:auto;height:52px"></div></div>
+            </div>
+            <div class="kasten">
+              <h5>Viral-Prognose</h5>
+              <div style="display:flex;align-items:center;gap:10px">
+                <svg width="52" height="52" viewBox="0 0 62 62"><circle cx="31" cy="31" r="26" fill="none" stroke="#DCE8F1" stroke-width="7"/><circle cx="31" cy="31" r="26" fill="none" stroke="#FDDF5B" stroke-width="7" stroke-linecap="round" stroke-dasharray="163" stroke-dashoffset="47" transform="rotate(-90 31 31)"/></svg>
+                <div><b style="font-size:22px;display:block;line-height:1">71</b><span class="meta" style="font-size:10.5px">Schwelle 60 · über der Grenze</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="stTrans">⏮ ◀◀ <b>▶</b> ▶▶ ⏭ <span>⟲ Loop</span> <span>[ In</span> <span>Out ]</span> <span class="tc">00:11:18 / 00:38:04</span></div>
+      </div>
+    </div>
+
+    <div class="stIns">
+      <div class="stTabs"><button class="an">Video</button><button>Farbe</button><button>Audio</button><button>Text</button></div>
+      <div class="stBody">
+        <h4 class="stH">Untertitel-Stil</h4>
+        <div class="stStile">
+          <div class="an">Kara<em>oke</em></div><div>Klassisch</div>
+          <div style="background:#FDDF5B;color:#1a1a1a">Highlight</div>
+          <div style="font-family:var(--serif);font-style:italic;text-transform:none;font-weight:400;font-size:11.5px">Clean Serif</div>
+        </div>
+        <h4 class="stH">Transform</h4>
+        <div class="stReg">
+          <div><div class="z"><span>Skalierung</span><b>112 %<u>◇</u></b></div><div class="stBahn"><i style="width:56%"></i><u style="left:56%"></u></div></div>
+          <div><div class="z"><span>Position Y</span><b>−34 px<u>◇</u></b></div><div class="stBahn"><i style="width:40%"></i><u style="left:40%"></u></div></div>
+          <div><div class="z"><span>Zoom-Punch</span><b>34 %<u>◇</u></b></div><div class="stBahn"><i style="width:34%"></i><u style="left:34%"></u></div></div>
+          <div><div class="z"><span>Tempo</span><b>1,00×</b></div><div class="stBahn"><i style="width:50%"></i><u style="left:50%"></u></div></div>
+        </div>
+        <h4 class="stH">Farbe · Lift / Gamma / Gain</h4>
+        <div class="stRaeder">
+          <div class="stRad"><div class="r"></div><span>Lift</span></div>
+          <div class="stRad"><div class="r"></div><span>Gamma</span></div>
+          <div class="stRad"><div class="r"></div><span>Gain</span></div>
+        </div>
+        <div class="stKurve">
+          <svg viewBox="0 0 200 78" preserveAspectRatio="none" style="width:100%;height:100%">
+            <g stroke="#DCE8F1" stroke-width="1"><line x1="50" y1="0" x2="50" y2="78"/><line x1="100" y1="0" x2="100" y2="78"/><line x1="150" y1="0" x2="150" y2="78"/><line x1="0" y1="26" x2="200" y2="26"/><line x1="0" y1="52" x2="200" y2="52"/></g>
+            <path d="M0 74 C 60 60, 70 26, 110 20 S 170 8, 200 4" fill="none" stroke="#FF7448" stroke-width="2.2"/>
+            <circle cx="72" cy="38" r="3.4" fill="#fff" stroke="#1A1A1A" stroke-width="1.6"/>
+            <circle cx="132" cy="14" r="3.4" fill="#fff" stroke="#1A1A1A" stroke-width="1.6"/>
+          </svg>
+        </div>
+        <div class="stReg"><div class="z"><span>LUT</span><b>TET · Stufe 3</b></div><div class="z"><span>Sättigung</span><b>+1,3</b></div><div class="z"><span>Kontrast</span><b>+12</b></div></div>
+        <h4 class="stH">Effekte</h4>
+        <div class="stGit">
+          <div class="an">Wort-Pop</div><div class="an">Auto-B-Roll</div><div>Shake</div>
+          <div class="an">Marken-Leiste</div><div>Glitch</div><div>Blur-In</div>
+          <div class="an">CTA-Box</div><div>Split</div><div>Flash</div>
+        </div>
+        <h4 class="stH">Automatik</h4>
+        <div class="stSch"><span>Pausen rausnehmen</span><i class="stSw an"></i></div>
+        <div class="stSch"><span>Versprecher erkennen</span><i class="stSw an"></i></div>
+        <div class="stSch"><span>Gesicht mittig halten</span><i class="stSw an"></i></div>
+        <div class="stSch"><span>Kunden zensieren</span><i class="stSw"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stTl">
+    <div class="stTlK"><span>Zeitleiste</span>
+      <div class="w">
+        <span class="an">✂ Teilen</span><span>⤺ Rückgängig</span><span>◇ Keyframe</span><span>⇉ Übergang</span><span>⇥ Magnet</span><span>🔊 Ducking</span>
+        <span class="stZoom">− <i class="bz"><i></i></i> +</span>
+      </div>
+    </div>
+    <div class="stLin">
+      <div class="io" style="left:0;right:0"></div>
+      <i style="left:0"></i><span style="left:3px">00:00</span>
+      <i style="left:12.5%"></i><span style="left:calc(12.5% + 3px)">00:05</span>
+      <i style="left:25%"></i><span style="left:calc(25% + 3px)">00:10</span>
+      <i style="left:37.5%"></i><span style="left:calc(37.5% + 3px)">00:15</span>
+      <i style="left:50%"></i><span style="left:calc(50% + 3px)">00:20</span>
+      <i style="left:62.5%"></i><span style="left:calc(62.5% + 3px)">00:25</span>
+      <i style="left:75%"></i><span style="left:calc(75% + 3px)">00:30</span>
+      <i style="left:87.5%"></i><span style="left:calc(87.5% + 3px)">00:35</span>
+      <div class="mk" style="left:34%"></div><div class="mk" style="left:57%"></div><div class="mk" style="left:90%"></div>
+    </div>
+    <div style="position:relative">
+      <div class="stKopf"></div>
+      <div class="stSpur"><div class="n">G · Grafik<em>👁 🔒</em></div><div class="b">
+        <div class="tlc g" style="left:26%;width:13%"><span>Zahlen-Overlay</span>${kf([20,70])}</div>
+        <div class="tlc g" style="left:58%;width:15%"><span>Q&amp;A-Tafel</span></div>
+        <div class="tlc g" style="left:90%;width:10%"><span>222-Box</span></div>
+      </div></div>
+      <div class="stSpur"><div class="n">T · Text<em>👁 🔒</em></div><div class="b">
+        <div class="tlc t" style="left:0;width:19%"><span>Hook-Box</span><em>fade</em></div>
+        <div class="tlc t" style="left:20%;width:52%"><span>Untertitel · Karaoke</span><em>41</em>${kf([18,44,71])}</div>
+        <div class="tlc t" style="left:90%;width:10%"><span>Endcard</span></div>
+      </div></div>
+      <div class="stSpur"><div class="n">V · Video<em>👁 🔒</em></div><div class="b">
+        ${vclip(0,19,'Hook · nah',F(1),[],'LUT')}
+        <div class="stUeg" style="left:18.4%"></div>
+        ${vclip(19.6,14,'Punch-In',F(2),[30],'Zoom')}
+        ${vclip(34.2,22,'Argument 1',F(3),[22,63],'Speed 0,9×')}
+        <div class="stUeg" style="left:56%"></div>
+        ${vclip(56.8,17,'B-Roll',F(4),[],'')}
+        ${vclip(74.4,15,'Pointe',F(5),[48],'Punch')}
+        ${vclip(90,10,'CTA',F(6),[],'')}
+      </div></div>
+      <div class="stSpur"><div class="n">A1 · Stimme<em>🔇 S</em></div><div class="b">
+        <div class="tlc m" style="left:0;width:100%;background:#8a5a2e"><span>Originalton · RNNoise · Ducking an</span><div class="tlw">${welle(60)}</div></div>
+      </div></div>
+      <div class="stSpur"><div class="n">A2 · Musik<em>🔇 S</em></div><div class="b">
+        <div class="tlc m" style="left:0;width:100%"><span>Sound-Bett „calm“ · −18 dB</span><div class="tlw">${welle(60)}</div></div>
+      </div></div>
+      <div class="stSpur"><div class="n">A3 · SFX<em>🔇 S</em></div><div class="b">
+        <div class="tlc s" style="left:18.6%;width:4%"><span>whoosh</span></div>
+        <div class="tlc s" style="left:33.4%;width:4%"><span>click</span></div>
+        <div class="tlc s" style="left:56%;width:4%"><span>whoosh</span></div>
+        <div class="tlc s" style="left:89.2%;width:4.5%"><span>pop</span></div>
+      </div></div>
+    </div>
+    <div class="stFuss">
+      <span>Render-Warteschlange <b>leer</b></span>
+      <span>GPU <b>VideoToolbox</b></span>
+      <span>Cache <b>2,1 GB</b></span>
+      <span>Projekt <b>9:16 · 30 fps</b></span>
+      <div class="re"><span>Auswahl: <b>Argument 1</b> · 00:13:04 – 00:21:22</span><span>Zoom <b>68 %</b></span></div>
+    </div>
+  </div>
+  </div>`;
   return '';
 }
 // Karussells: was hereinkam (Rohmaterial) und was zur Freigabe steht
