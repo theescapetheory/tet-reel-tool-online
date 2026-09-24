@@ -103,6 +103,14 @@ function optimistic(p, body) {
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x"); const p = u.pathname;
   try {
+    // Billiger Endpunkt ohne Login, nur zum Wachhalten. Render legt den Dienst im Gratis-Tarif nach
+    // ~15 Minuten ohne Anfrage schlafen; der erste Zugriff danach braucht bis zu einer Minute, und
+    // genau in diesem Fenster laufen Uploads ueber den externen Link in 502/503 (Anne 24.09.2026:
+    // „der Hochlade-Link muss funktionieren"). Der Mac klopft alle 5 Minuten hier an.
+    if (p === "/gesund") {
+      const offen = fs.existsSync(UPLOADS) ? fs.readdirSync(UPLOADS).filter((x) => !x.startsWith(".")).length : 0;
+      return sendJSON(res, 200, { ok: true, wach: true, offene_uploads: offen, zeit: new Date().toISOString() });
+    }
     // ---------- Sync (Rechner mit Engine) ----------
     if (p.startsWith("/sync/")) {
       if (!syncOk(req)) return sendJSON(res, 401, { error: "sync" });
