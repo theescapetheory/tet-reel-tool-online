@@ -1171,6 +1171,8 @@ function capcutFenster(titel, html){
 async function capcutOeffnen(pfad, slug){
   const u = await api('/api/capcut-uebergabe?dir=' + encodeURIComponent(pfad));
   if(u && u.da){
+    // Dieses Projekt vorziehen — der Empfang beim Cutter nimmt Angefordertes zuerst
+    post('/api/capcut-anfordern', {slug: u.slug});
     capcutFenster('CapCut-Projekt: ' + (slug||u.slug), `
       <p style="font-size:13px;margin:10px 0 0">Das fertige Projekt liegt bereit — alle Ebenen: ein Clip je Kamera-Einstellung, Punch-Zooms als Keyframes, Titel und Inserts als Text- und Bild-Ebenen, jede Caption eine eigene Text-Ebene, SFX als Tonspur.</p>
       <div class="sec"><h2>So ist es in einer halben Minute in CapCut</h2>
