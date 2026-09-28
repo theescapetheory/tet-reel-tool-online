@@ -38,9 +38,9 @@ textarea{min-height:110px;resize:vertical}
 </div>
 
 <div class="card">
-  <label>1 · Hauptmaterial (Video)</label>
-  <div class="drop" id="dropV"><b>Video hier ablegen</b> oder klicken</div>
-  <input type="file" id="video" accept="video/*" hidden>
+  <label>1 · Hauptmaterial (ein oder mehrere Videos)</label>
+  <div class="drop" id="dropV"><b>Videos hier ablegen</b> oder klicken</div>
+  <input type="file" id="video" accept="video/*" multiple hidden>
   <div class="files" id="listV"></div>
 </div>
 
@@ -68,7 +68,7 @@ function cutterSicht(){const a=(document.querySelector('input[name=art]:checked'
 document.querySelectorAll('input[name=art]').forEach(r=>r.addEventListener('change',cutterSicht));
 const KEY=new URLSearchParams(location.search).get('key')||'';
 const $=(s)=>document.querySelector(s);
-let video=null, zusatz=[];
+let videos=[], zusatz=[];
 function bind(drop,input,onFiles){drop.onclick=()=>input.click();input.onchange=()=>onFiles([...input.files]);
  ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('on')}));
  ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('on')}));
@@ -79,32 +79,59 @@ const mb=(n)=>Math.round(n/1e6)+' MB';
 // niemand wusste, warum. Jetzt sieht man es beim Auswaehlen.
 const MAX_BYTES = 3 * 1024 * 1024 * 1024;
 const HINWEIS = (t, farbe) => `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;line-height:1.45;background:${farbe==='rot'?'#fdecec':'#fff8e6'};border-left:4px solid ${farbe==='rot'?'#d03030':'#e0a500'};color:#2a2a2a">${t}</div>`;
-bind($('#dropV'),$('#video'),fs=>{
-  video=fs.find(f=>/video|\.(mp4|mov|m4v)$/i.test(f.type+f.name))||null;
+// Mehrere Teile in EINER Lieferung (Anne 24.09. und 28.09.2026): Wer ein Reel aus mehreren
+// Schnipseln gebaut haben will, waehlt sie hier zusammen aus. Sie bleiben ein Paket, in der
+// Reihenfolge der Liste; der Mac verbindet sie zu einem Beitrag. Die Grenze gilt je Datei.
+const istVideo=f=>/video|\.(mp4|mov|m4v)$/i.test(f.type+f.name);
+function listeV(){
+  const zuGross=videos.filter(f=>f.size>MAX_BYTES), summe=videos.reduce((a,f)=>a+f.size,0);
   let extra='';
-  if(video && video.size > MAX_BYTES){
-    extra = HINWEIS(`<b>Diese Datei ist zu gross.</b> Das Hochladen geht bis ${mb(MAX_BYTES)}, deine Datei hat ${mb(video.size)}.<br>
+  if(zuGross.length){
+    extra = HINWEIS(`<b>${zuGross.length>1?'Diese Dateien sind':'Diese Datei ist'} zu gross:</b> ${zuGross.map(f=>f.name).join(', ')}. Das Hochladen geht bis ${mb(MAX_BYTES)} je Datei.<br>
       Schick sie stattdessen als <b>iCloud-Link</b> — in Fotos oder Dateien auf „Teilen" → „Link kopieren", und den Link hier ins Feld <b>Notizen</b> einsetzen. Dann holen wir das Video direkt bei Apple ab, ohne Groessengrenze.`,'rot');
-  } else if(video && video.size > 1.5*1024*1024*1024){
-    extra = HINWEIS(`Grosse Datei (${mb(video.size)}). Das kann ein paar Minuten dauern — lass die Seite bitte offen, bis der Balken durch ist.`,'gelb');
+  } else if(summe > 1.5*1024*1024*1024){
+    extra = HINWEIS(`Grosse Lieferung (${mb(summe)}). Das kann ein paar Minuten dauern — lass die Seite bitte offen, bis der Balken durch ist.`,'gelb');
   }
-  $('#listV').innerHTML = video ? `<div><span>${video.name}</span><span>${mb(video.size)}</span></div>` + extra : '';
-  $('#senden').disabled = !video || video.size > MAX_BYTES;
+  $('#listV').innerHTML = videos.map((f,i)=>`<div><span>${videos.length>1?(i+1)+' · ':''}${f.name}</span><span>${mb(f.size)} ${videos.length>1&&i>0?`<a href="#" onclick="hoch(${i});return false">↑</a> `:''}<a href="#" onclick="raus(${i});return false">✕</a></span></div>`).join('') + extra;
+  $('#senden').disabled = !videos.length || zuGross.length>0;
+}
+function raus(i){videos.splice(i,1);listeV()}
+function hoch(i){[videos[i-1],videos[i]]=[videos[i],videos[i-1]];listeV()}
+bind($('#dropV'),$('#video'),fs=>{
+  for(const f of fs.filter(istVideo)) if(!videos.some(v=>v.name===f.name&&v.size===f.size)) videos.push(f);
+  $('#video').value=''; listeV();
 });
 bind($('#dropZ'),$('#zusatz'),fs=>{zusatz=zusatz.concat(fs);$('#listZ').innerHTML=zusatz.map(f=>`<div><span>${f.name}</span><span>${mb(f.size)}</span></div>`).join('')});
 function put(url,file,onProg){return new Promise((res,rej)=>{const x=new XMLHttpRequest();x.open('POST',url);x.upload.onprogress=e=>onProg&&onProg(e.loaded/e.total);x.onload=()=>x.status<300?res(JSON.parse(x.responseText)):rej(new Error(x.responseText||x.status));x.onerror=()=>rej(new Error('Netzwerkfehler'));x.send(file)})}
+const artJetzt=()=>(document.querySelector('input[name=art]:checked')||{}).value||'reel';
 $('#senden').onclick=async()=>{
-  if(!video)return; const btn=$('#senden'); btn.disabled=true; $('#err').textContent=''; const bar=$('#bar'); bar.hidden=false; const fill=bar.querySelector('i');
+  if(!videos.length)return; const btn=$('#senden'); btn.disabled=true; $('#err').textContent=''; $('#ok').hidden=true; const bar=$('#bar'); bar.hidden=false; const fill=bar.querySelector('i');
+  const art=artJetzt(), mitZusatz=art!=='heute';
+  // Bei mehreren Teilen 01-, 02- … voranstellen: die Reihenfolge der Liste gilt, nicht das Dateisystem.
+  const teile=videos.map((f,i)=>({f,name:videos.length>1?String(i+1).padStart(2,'0')+'-'+f.name:f.name}));
+  const beilagen=mitZusatz?zusatz:[];
+  const q=`key=${encodeURIComponent(KEY)}`;
   try{
-    const meta=await fetch('/api/upload-paket?key='+encodeURIComponent(KEY),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:video.name,art:(document.querySelector('input[name=art]:checked')||{}).value||'reel',notizen:((document.querySelector('input[name=art]:checked')||{}).value!=='heute')?$('#notizen').value:'',absender:$('#absender').value,zusatz:((document.querySelector('input[name=art]:checked')||{}).value!=='heute')?zusatz.map(f=>f.name):[]})}).then(r=>r.json());
+    const meta=await fetch('/api/upload-paket?'+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:videos[0].name,teile:teile.map(t=>t.name),art,notizen:mitZusatz?$('#notizen').value:'',absender:$('#absender').value,zusatz:beilagen.map(f=>f.name)})}).then(r=>r.json());
     if(!meta.ok)throw new Error(meta.error||'Paket konnte nicht angelegt werden');
-    const total=video.size+zusatz.reduce((a,f)=>a+f.size,0); let done=0;
-    await put(`/api/upload-paket/datei?key=${encodeURIComponent(KEY)}&paket=${encodeURIComponent(meta.id)}&art=video&name=${encodeURIComponent(video.name)}`,video,p=>fill.style.width=((done+p*video.size)/total*100)+'%'); done+=video.size;
-    for(const f of zusatz){await put(`/api/upload-paket/datei?key=${encodeURIComponent(KEY)}&paket=${encodeURIComponent(meta.id)}&art=zusatz&name=${encodeURIComponent(f.name)}`,f,p=>fill.style.width=((done+p*f.size)/total*100)+'%');done+=f.size}
-    await fetch(`/api/upload-paket/fertig?key=${encodeURIComponent(KEY)}&paket=${encodeURIComponent(meta.id)}`,{method:'POST'});
-    fill.style.width='100%'; $('#ok').hidden=false; const art=(document.querySelector('input[name=art]:checked')||{}).value; $('#ok').innerHTML=`<b>Angekommen.</b> „${video.name}“${zusatz.length?' + '+zusatz.length+' Zusatzdatei(en)':''} — ${art==='heute'?'Story bekommt jetzt Untertitel und geht in wenigen Minuten online.':art==='story'?'liegt in der Story-Planung.':'liegt im Eingang und wird verarbeitet.'} Danke!`;
-    video=null; zusatz=[]; $('#listV').innerHTML=''; $('#listZ').innerHTML=''; $('#notizen').value='';
-  }catch(e){$('#err').textContent='Fehler: '+e.message; btn.disabled=false}
+    const total=teile.reduce((a,t)=>a+t.f.size,0)+beilagen.reduce((a,f)=>a+f.size,0); let done=0;
+    const datei=async(f,name,wie)=>{
+      // Ein Abbruch mitten in der Lieferung soll nicht alles kosten: jede Datei bekommt drei Versuche.
+      for(let v=1;;v++){
+        try{await put(`/api/upload-paket/datei?${q}&paket=${encodeURIComponent(meta.id)}&art=${wie}&name=${encodeURIComponent(name)}`,f,p=>fill.style.width=((done+p*f.size)/total*100)+'%');break}
+        catch(e){if(v>=3||/zu gross|groesser/i.test(e.message))throw e; await new Promise(r=>setTimeout(r,4000*v))}
+      }
+      done+=f.size;
+    };
+    for(const t of teile) await datei(t.f,t.name,'video');
+    for(const f of beilagen) await datei(f,f.name,'zusatz');
+    const ende=await fetch(`/api/upload-paket/fertig?${q}&paket=${encodeURIComponent(meta.id)}`,{method:'POST'}).then(r=>r.json());
+    if(ende&&ende.error)throw new Error(ende.error);
+    fill.style.width='100%'; $('#ok').hidden=false;
+    const was=teile.length>1?`${teile.length} Videos (werden zu einem Beitrag verbunden)`:`„${videos[0].name}“`;
+    $('#ok').innerHTML=`<b>Angekommen.</b> ${was}${beilagen.length?' + '+beilagen.length+' Zusatzdatei(en)':''} — ${art==='heute'?'Story bekommt jetzt Untertitel und geht in wenigen Minuten online.':art==='story'?'liegt in der Story-Planung.':'liegt im Eingang und wird verarbeitet.'} Danke!`;
+    videos=[]; zusatz=[]; $('#listV').innerHTML=''; $('#listZ').innerHTML=''; $('#notizen').value='';
+  }catch(e){let m=e.message;try{m=JSON.parse(m).error||m}catch{};$('#err').textContent='Fehler: '+m; btn.disabled=false}
 };
 </script>
 </body></html>
