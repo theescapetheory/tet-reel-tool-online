@@ -196,8 +196,8 @@ const server = http.createServer(async (req, res) => {
         const c = snapshot.capcut || {};
         const e = c[slug];
         return sendJSON(res, 200, e
-          ? { slug, da: true, projekt: e.projekt, weblink: e.weblink, empfang: c._empfang || null }
-          : { slug, da: false, empfang: c._empfang || null });
+          ? { slug, da: true, projekt: e.projekt, weblink: e.weblink, empfang: c._empfang || null, empfaenger: c._empfaenger || [] }
+          : { slug, da: false, empfang: c._empfang || null, empfaenger: c._empfaenger || [] });
       }
       if (p.startsWith("/api/storyroh/")) { const n = decodeURIComponent(p.slice(14)); return sendJSON(res, 200, (snapshot.storyroh || {})[n] || { error: "noch nicht synchronisiert" }); }
       if (p.startsWith("/api/session/")) { const id = decodeURIComponent(p.split("/")[3]); return sendJSON(res, 200, (snapshot.sessions || {})[id] || { id, fehlt: true }); }

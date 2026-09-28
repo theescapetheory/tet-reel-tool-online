@@ -1173,7 +1173,14 @@ async function capcutOeffnen(pfad, slug){
   if(u && u.da){
     // Dieses Projekt vorziehen — der Empfang beim Cutter nimmt Angefordertes zuerst
     post('/api/capcut-anfordern', {slug: u.slug});
+    // Laeuft bei irgendwem ein Empfang? Bis 28.09. behauptete dieses Fenster „schon in CapCut",
+    // ohne es zu wissen. Jetzt steht hier, wer sich wann zuletzt gemeldet hat — und woran es hakt.
+    const em=(u.empfaenger||[]).map(e=>{
+      const frisch=e.minuten_her<=3;
+      const wann=e.minuten_her<1?'gerade eben':e.minuten_her<90?'vor '+e.minuten_her+' Min.':'zuletzt '+esc(String(e.zeit).slice(0,16).replace('T',' '));
+      return `<div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;margin-top:8px;font-size:13px"><b>${esc(e.rechner)}</b> · ${frisch?'Empfang läuft':'Empfang meldet sich nicht mehr'} · ${wann}${e.capcut_offen?' · CapCut ist offen, Projekt erscheint nach Neustart von CapCut':''}${(e.wartet||[]).length?'<br>'+e.wartet.map(esc).join('<br>'):''}${(e.fehler||[]).length?'<br><span style="color:#b3261e">'+e.fehler.map(esc).join('<br>')+'</span>':''}</div>`}).join('');
     capcutFenster('CapCut-Projekt: ' + (slug||u.slug), `
+      <div class="sec"><h2>Empfang</h2>${em||'<p style="font-size:13px">Auf keinem Rechner läuft der Empfang. Das Projekt kommt nur über den Weg „von Hand" unten nach CapCut, bis er einmal eingerichtet ist.</p>'}</div>
       <p style="font-size:13px;margin:10px 0 0">Das fertige Projekt liegt bereit — alle Ebenen: ein Clip je Kamera-Einstellung, Punch-Zooms als Keyframes, Titel und Inserts als Text- und Bild-Ebenen, jede Caption eine eigene Text-Ebene, SFX als Tonspur.</p>
       <div class="sec"><h2>So ist es in einer halben Minute in CapCut</h2>
       <p style="font-size:13px">Läuft der Empfang auf deinem Mac, ist das Projekt <b>schon in CapCut</b> — Liste oben, Name <code>${u.projekt}</code>. Sonst einmalig einrichten:</p>
