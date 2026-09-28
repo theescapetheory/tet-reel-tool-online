@@ -2,13 +2,21 @@ services:
   - type: web
     name: tet-reel-tool
     runtime: node
-    plan: free
+    # 28.09.2026: bezahlter Tarif mit fester Platte. Im Gratis-Tarif vergass der Dienst bei jedem
+    # Deploy und jedem Einschlafen alle Dateien — schwarze Vorschauen, verlorene Uploads.
+    plan: starter
     buildCommand: ""
     startCommand: node server.js
     healthCheckPath: /api/online
     autoDeploy: true
+    disk:
+      name: studio-daten
+      mountPath: /var/data
+      sizeGB: 10
     envVars:
       - key: COCKPIT_PASS
         sync: false
       - key: SYNC_SECRET
         sync: false
+      - key: DATA_DIR
+        value: /var/data

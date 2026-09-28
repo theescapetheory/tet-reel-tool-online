@@ -100,6 +100,11 @@ function optimistic(p, body) {
   writeJSON(SNAP, snapshot);
 }
 
+// Ein einzelner Fehler darf nicht den ganzen Dienst beenden: Render startet ihn dann neu, und im
+// Gratis-Tarif ist danach der Speicher leer (28.09.2026).
+process.on("uncaughtException", (e) => console.error("Fehler abgefangen:", e && e.stack || e));
+process.on("unhandledRejection", (e) => console.error("Versprechen abgelehnt:", e && e.stack || e));
+
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x"); const p = u.pathname;
   try {
@@ -134,7 +139,13 @@ const server = http.createServer(async (req, res) => {
       if (p === "/sync/asset" && req.method === "POST") {
         const rel = decodeURIComponent(u.searchParams.get("path") || ""); const f = safe(ASSETS, rel);
         if (!f) return sendJSON(res, 400, { error: "pfad" });
-        fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, await readBody(req, 500e6));
+        // 28.09.2026: Die Datei ging bisher komplett durch den Arbeitsspeicher (bis 500 MB auf einer
+        // 512-MB-Maschine). Der Probelauf sah den Dienst mitten im Betrieb neu starten — und bei jedem
+        // Neustart war alles weg, auch wartende Uploads. Jetzt laeuft sie direkt auf die Platte, erst
+        // unter vorlaeufigem Namen, damit nie eine halbe Datei als fertig gilt.
+        const teil = f + ".teil";
+        try { await streamZu(req, teil, 500e6); fs.renameSync(teil, f); }
+        catch (e) { try { fs.unlinkSync(teil); } catch {} return sendJSON(res, 500, { error: String(e.message || e) }); }
         const mt = Number(u.searchParams.get("mtime") || 0); if (mt) fs.utimesSync(f, mt, mt);
         return sendJSON(res, 200, { ok: true });
       }
