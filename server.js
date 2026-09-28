@@ -188,6 +188,17 @@ const server = http.createServer(async (req, res) => {
         const leer = { "/api/material": { material: [] }, "/api/storys": { storys: [] }, "/api/karussells": { karussells: [] } };
         return sendJSON(res, 200, snapshot[direkt[p]] ?? leer[p] ?? {});
       }
+      // Fertige CapCut-Projekte: der Mac spiegelt beim Sync, was in der Dropbox liegt. Ohne das
+      // lief „In CapCut bearbeiten" online ins Leere (Anne 28.09.).
+      if (p === "/api/capcut-uebergabe") {
+        const dir = u.searchParams.get("dir") || "";
+        const slug = dir.split("/").filter(Boolean).pop() || "";
+        const c = snapshot.capcut || {};
+        const e = c[slug];
+        return sendJSON(res, 200, e
+          ? { slug, da: true, projekt: e.projekt, weblink: e.weblink, empfang: c._empfang || null }
+          : { slug, da: false, empfang: c._empfang || null });
+      }
       if (p.startsWith("/api/storyroh/")) { const n = decodeURIComponent(p.slice(14)); return sendJSON(res, 200, (snapshot.storyroh || {})[n] || { error: "noch nicht synchronisiert" }); }
       if (p.startsWith("/api/session/")) { const id = decodeURIComponent(p.split("/")[3]); return sendJSON(res, 200, (snapshot.sessions || {})[id] || { id, fehlt: true }); }
       if (p.startsWith("/api/reel/")) { const [, , , sid, slug] = p.split("/").map(decodeURIComponent); return sendJSON(res, 200, (snapshot.reels || {})[sid + "/" + slug] || { fehlt: true }); }

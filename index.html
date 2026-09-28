@@ -1154,12 +1154,39 @@ function mitLinks(t){
 //     Funktioniert unabhaengig von Konto und Cloud — das ist der verlaessliche Weg.
 //  2. capcut-draft: baut das Projekt auf dem Mac; bei eingeschalteter Projektsynchronisierung erscheint
 //     es direkt in CapCut bei jedem, der mit dem Marketing-Zugang angemeldet ist.
+function capcutFenster(titel, html){
+  const d=document.createElement('div'); d.className='fenster'; d.id='aufDetail';
+  d.innerHTML=`<div class="box" style="width:min(680px,95vw);max-height:88vh;overflow:auto">
+    <div class="row" style="justify-content:space-between;align-items:baseline">
+      <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:19px;margin:0">${titel}</h2>
+      <button class="btn ghost" onclick="document.getElementById('aufDetail').remove()">schließen</button></div>
+    ${html}</div>`;
+  d.onclick=(e)=>{if(e.target===d)d.remove()};
+  document.body.appendChild(d);
+}
+// „In CapCut bearbeiten" — Nico drueckte den Knopf und es passierte nichts (Anne 28.09.). Zwei Ursachen:
+// eine zweite, aeltere Fassung dieser Funktion ueberschrieb sie, und sie baute nur den Draft auf Annes
+// Mac. Jetzt: erst nachsehen, ob das Projekt schon in der Dropbox liegt — bei 73 von 75 Reels tut es das,
+// dann ist es sofort da statt nach Minuten. Nur wenn es fehlt, wird gebaut.
 async function capcutOeffnen(pfad, slug){
-  const draft = ['capcut-draft', pfad];
-  if (window.HOSTED) draft.push('--nicht-oeffnen');    // online: nicht Annes CapCut aufreissen
-  job(draft, 'CapCut-Projekt bauen');
-  toast('CapCut-Projekt wird gebaut. Danach liegt es in CapCut unter „Projekte" — und als ZIP in Dropbox „Reels-Uebergabe/' + slug + '".', 11000);
-  setTimeout(()=>job(['capcut-paket', pfad], 'CapCut-Projekt in die Dropbox'), 1500);
+  const u = await api('/api/capcut-uebergabe?dir=' + encodeURIComponent(pfad));
+  if(u && u.da){
+    capcutFenster('CapCut-Projekt: ' + (slug||u.slug), `
+      <p style="font-size:13px;margin:10px 0 0">Das fertige Projekt liegt bereit — alle Ebenen: ein Clip je Kamera-Einstellung, Punch-Zooms als Keyframes, Titel und Inserts als Text- und Bild-Ebenen, jede Caption eine eigene Text-Ebene, SFX als Tonspur.</p>
+      <div class="sec"><h2>So ist es in einer halben Minute in CapCut</h2>
+      <p style="font-size:13px">Läuft der Empfang auf deinem Mac, ist das Projekt <b>schon in CapCut</b> — Liste oben, Name <code>${u.projekt}</code>. Sonst einmalig einrichten:</p>
+      ${u.empfang?`<p style="font-size:13px"><a class="netz" href="${u.empfang}" target="_blank" rel="noopener">Ordner „_EINMAL-EINRICHTEN" öffnen</a> → auf den eigenen Mac ziehen → Doppelklick auf „escape-studio Empfang einrichten.command". Ab dann erscheint jedes neue Projekt von selbst, alle 30 Sekunden wird nachgesehen.</p>`:''}
+      </div>
+      <div class="sec"><h2>Ohne Empfang, von Hand</h2>
+      <p style="font-size:13px"><a class="netz" href="${u.weblink}" target="_blank" rel="noopener">Projektordner in der Dropbox öffnen</a> → Doppelklick auf „CapCut-Projekt oeffnen.command". Beim ersten Mal blockt macOS: „Fertig" → Systemeinstellungen → Datenschutz &amp; Sicherheit → „Trotzdem öffnen".</p></div>
+      <div class="sec"><h2>Fertig?</h2>
+      <p style="font-size:13px">Export 1080×1920 in den Dropbox-Ordner <b>Reels-Freigabe</b>, Dateiname muss <code>${slug||u.slug}</code> enthalten. Rund 20 Sekunden später steht es hier unter „3 · Freigegeben".</p></div>`);
+    return;
+  }
+  capcutFenster('CapCut-Projekt wird gebaut', `
+    <p style="font-size:13px;margin:10px 0 0">Für <b>${slug||''}</b> liegt noch kein fertiges Projekt in der Dropbox. Es wird jetzt gebaut — das dauert ein bis zwei Minuten. Danach diesen Knopf noch einmal drücken, dann steht hier der Link.</p>`);
+  if (!window.HOSTED) job(['capcut-draft', pfad], 'CapCut auf diesem Mac öffnen');
+  job(['capcut-paket', pfad], 'CapCut-Projekt in die Dropbox');
 }
 // Material, das nicht auf Instagram gehoert (z. B. ein Clip fuer den Circle), aus der Auswahl nehmen.
 // Die Datei bleibt liegen — nur die Anzeige verschwindet, damit nichts unwiederbringlich weg ist.
@@ -1531,7 +1558,6 @@ function vFrei(m){
   m.innerHTML='<h1>Freigegebener Content</h1><div class="grid" id="freigrid">lädt …</div>';
   api('/api/frei').then(d=>{const g=$('#freigrid');if(!g)return;g.innerHTML=(d.reels||[]).map(r=>`<div class="card"><span class="pill freigegeben">freigegeben</span><h3 style="margin-top:8px">${esc(r.titel)}</h3><div class="meta">CTA ${esc(r.cta||'–')}</div><p style="font-size:13px;color:var(--grey);margin:8px 0">${esc(r.caption)}…</p><video controls preload="metadata" style="max-width:100%" src="/ready/${encodeURIComponent(r.slug)}/reel.mp4"></video><div class="row" style="margin-top:10px"><button class="btn" onclick="nav('plan')">In den Contentplan →</button></div></div>`).join('')||''});
 }
-async function capcutOeffnen(dir){job(['capcut-draft',dir],'Projekt in CapCut');toast('Baue CapCut-Projekt mit Ebenen (Clips + Text-Captions) — CapCut öffnet sich, Projekt liegt oben in der Liste.',9000)}
 async function capcutWebImport(dir){if(!window.tetDesktop)return toast('Nur in der TET-Studio-App');toast('Lade Material in CapCut Web …',8000);const r=await window.tetDesktop.oeffnen(dir);toast(r.ok?'✓ '+r.anzahl+' Videos im CapCut-Medienfenster.':'Import fehlgeschlagen: '+(r.grund||''),9000)}
 async function vSchnitt(m){
  // Desktop-Hülle: links diese Leiste, rechts CapCut Web eingebettet (BrowserView, gleicher Login wie capcut.com).
@@ -1550,7 +1576,7 @@ async function vSchnitt(m){
  m.innerHTML=`<div class="row" style="justify-content:space-between"><button class="btn ghost" onclick="nav('vorschnitt')">← Vorschnitt</button><span class="meta">${esc(cur.slug)}</span></div>
  <h1 style="margin-top:10px">${esc(red.titel||cur.slug)}</h1>
  <div class="sub">Hook: ${esc(red.hook||'–')} · CTA <b>${esc((red.cta&&red.cta.keyword)||'–')}</b></div>
- <div class="row" style="margin:12px 0"><button class="btn" onclick="capcutOeffnen('${esc(dir)}')">▶ Projekt in CapCut öffnen (Desktop, mit Ebenen)</button><button class="btn ghost" onclick="capcutWebImport('${esc(dir)}')">nur Material in CapCut Web</button><button class="btn ghost" onclick="job(['dropbox-uebergabe','${esc(dir)}'],'An CapCut übergeben');toast('Quelle + Vorschnitt + Untertitel liegen gleich in Dropbox „Reels-Uebergabe/${esc(cur.slug)}“ — rechts in CapCut: Import → Dropbox.',9000)">☁︎ Material nach Dropbox</button></div>
+ <div class="row" style="margin:12px 0"><button class="btn" onclick="capcutOeffnen('${esc(dir)}','${esc(cur.slug)}')">▶ Projekt in CapCut öffnen (Desktop, mit Ebenen)</button><button class="btn ghost" onclick="capcutWebImport('${esc(dir)}')">nur Material in CapCut Web</button><button class="btn ghost" onclick="job(['dropbox-uebergabe','${esc(dir)}'],'An CapCut übergeben');toast('Quelle + Vorschnitt + Untertitel liegen gleich in Dropbox „Reels-Uebergabe/${esc(cur.slug)}“ — rechts in CapCut: Import → Dropbox.',9000)">☁︎ Material nach Dropbox</button></div>
  <div class="meta" style="margin-top:6px"><b>In CapCut Desktop</b><br>„Projekt öffnen“ baut ein echtes Projekt mit allen Ebenen: ein Clip je Kamera-Einstellung (verlängerbar), Punch-Zooms als Keyframes, Titel/Typecards/Inserts als Text- und Bild-Ebenen, jede Caption eine Text-Ebene (Akzentwort gelb), SFX als Tonspur — alles editierbar.<br>Export 1080×1920 → Dropbox <b>Reels-Freigabe</b> (oder ~/Movies/TET Freigabe) → landet automatisch in 3 · Freigegeben</div>
  <div class="segl" style="font-size:11px">${esc(dir)}/capcut-paket/</div>
  <div class="segl">${segs||'(keine Segmente)'}</div>
