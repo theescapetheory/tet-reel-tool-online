@@ -1179,8 +1179,10 @@ async function capcutOeffnen(pfad, slug){
       </div>
       <div class="sec"><h2>Ohne Empfang, von Hand</h2>
       <p style="font-size:13px"><a class="netz" href="${u.weblink}" target="_blank" rel="noopener">Projektordner in der Dropbox öffnen</a> → Doppelklick auf „CapCut-Projekt oeffnen.command". Beim ersten Mal blockt macOS: „Fertig" → Systemeinstellungen → Datenschutz &amp; Sicherheit → „Trotzdem öffnen".</p></div>
-      <div class="sec"><h2>Fertig?</h2>
-      <p style="font-size:13px">Export 1080×1920 in den Dropbox-Ordner <b>Reels-Freigabe</b>, Dateiname muss <code>${slug||u.slug}</code> enthalten. Rund 20 Sekunden später steht es hier unter „3 · Freigegeben".</p></div>`);
+      <div class="sec"><h2>Fertig? Dann einfach exportieren</h2>
+      <p style="font-size:13px">Mit eingerichtetem Empfang ist der <b>Zielordner egal</b> — Downloads, Movies/CapCut oder „TET Freigabe". Der Export wird am Namen erkannt und landet von selbst unter „3 · Freigegeben". Den Namen, den CapCut vorschlägt, stehen lassen.</p>
+      <p style="font-size:13px">Im Export-Fenster: <b>Auflösung 1080p</b> — nicht 2K, das Projekt ist 1080×1920 und wird sonst nur größer gerechnet. Format mp4, 30 fps, H.264.</p>
+      <p style="font-size:13px;color:var(--grey)">Ohne Empfang: in den Dropbox-Ordner <b>Reels-Freigabe</b> exportieren, Dateiname muss <code>${slug||u.slug}</code> enthalten.</p></div>`);
     return;
   }
   capcutFenster('CapCut-Projekt wird gebaut', `
