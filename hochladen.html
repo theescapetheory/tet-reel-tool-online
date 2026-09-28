@@ -74,7 +74,23 @@ function bind(drop,input,onFiles){drop.onclick=()=>input.click();input.onchange=
  ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('on')}));
  drop.addEventListener('drop',ev=>onFiles([...ev.dataTransfer.files]));}
 const mb=(n)=>Math.round(n/1e6)+' MB';
-bind($('#dropV'),$('#video'),fs=>{video=fs.find(f=>/video|\.(mp4|mov|m4v)$/i.test(f.type+f.name))||null;$('#listV').innerHTML=video?`<div><span>${video.name}</span><span>${mb(video.size)}</span></div>`:'';$('#senden').disabled=!video});
+// Groessengrenze des Relais. Vorher pruefen statt hinterher abbrechen: bis zum 28.09.2026
+// lud man erst 3 GB hoch und bekam dann ein blankes „zu gross" — die Zeit war weg und
+// niemand wusste, warum. Jetzt sieht man es beim Auswaehlen.
+const MAX_BYTES = 3 * 1024 * 1024 * 1024;
+const HINWEIS = (t, farbe) => `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;line-height:1.45;background:${farbe==='rot'?'#fdecec':'#fff8e6'};border-left:4px solid ${farbe==='rot'?'#d03030':'#e0a500'};color:#2a2a2a">${t}</div>`;
+bind($('#dropV'),$('#video'),fs=>{
+  video=fs.find(f=>/video|\.(mp4|mov|m4v)$/i.test(f.type+f.name))||null;
+  let extra='';
+  if(video && video.size > MAX_BYTES){
+    extra = HINWEIS(`<b>Diese Datei ist zu gross.</b> Das Hochladen geht bis ${mb(MAX_BYTES)}, deine Datei hat ${mb(video.size)}.<br>
+      Schick sie stattdessen als <b>iCloud-Link</b> — in Fotos oder Dateien auf „Teilen" → „Link kopieren", und den Link hier ins Feld <b>Notizen</b> einsetzen. Dann holen wir das Video direkt bei Apple ab, ohne Groessengrenze.`,'rot');
+  } else if(video && video.size > 1.5*1024*1024*1024){
+    extra = HINWEIS(`Grosse Datei (${mb(video.size)}). Das kann ein paar Minuten dauern — lass die Seite bitte offen, bis der Balken durch ist.`,'gelb');
+  }
+  $('#listV').innerHTML = video ? `<div><span>${video.name}</span><span>${mb(video.size)}</span></div>` + extra : '';
+  $('#senden').disabled = !video || video.size > MAX_BYTES;
+});
 bind($('#dropZ'),$('#zusatz'),fs=>{zusatz=zusatz.concat(fs);$('#listZ').innerHTML=zusatz.map(f=>`<div><span>${f.name}</span><span>${mb(f.size)}</span></div>`).join('')});
 function put(url,file,onProg){return new Promise((res,rej)=>{const x=new XMLHttpRequest();x.open('POST',url);x.upload.onprogress=e=>onProg&&onProg(e.loaded/e.total);x.onload=()=>x.status<300?res(JSON.parse(x.responseText)):rej(new Error(x.responseText||x.status));x.onerror=()=>rej(new Error('Netzwerkfehler'));x.send(file)})}
 $('#senden').onclick=async()=>{

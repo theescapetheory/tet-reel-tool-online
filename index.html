@@ -1325,7 +1325,7 @@ function uplFormular(ziel, key){
       <button class="btn ghost" data-art="karussell" onclick="uplArtWahl('karussell')">Karussell</button>
       <button class="btn ghost" data-art="heute" title="schnittfertig — Untertitel drauf und sofort raus" onclick="uplArtWahl('heute')">⚡ Story HEUTE — sofort posten</button></div>
     <label class="meta"><b>Video</b></label>
-    <div class="row" id="uplVideoZeile" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Video wählen<input type="file" accept="video/*" hidden onchange="uplSetVideo(this)"></label><span id="uplV" class="meta">–</span></div>
+    <div class="row" id="uplVideoZeile" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Video wählen<input type="file" accept="video/*" multiple hidden onchange="uplSetVideo(this)"></label><span id="uplV" class="meta">–</span></div>
     <div id="uplKarussellZeile" hidden>
       <div class="row" id="uplKarArt" style="gap:8px;flex-wrap:wrap;margin-bottom:8px">
         <button class="btn" data-kar="fertig" onclick="uplKarArt('fertig')">Fertige Slides</button>
@@ -1343,7 +1343,7 @@ function uplFormular(ziel, key){
     </div>
     <div class="row" style="margin-top:12px;align-items:center"><button class="btn" id="uplGo" onclick="uplSenden('${key||''}')" disabled>Hochladen</button><span id="uplStatus" class="meta"></span></div></div>`;
 }
-let UPL={art:'reel',video:null,zusatz:[]};
+let UPL={art:'reel',video:null,videos:[],zusatz:[]};
 // iCloud-Link (Anne 16.09.: Alex teilt so): der Rechner holt die passende Fassung und meldet sie im Eingang an
 function uplIcloudHolen(){const i=document.getElementById('uplIcloud'),st=document.getElementById('uplStatus');const l=(i.value||'').trim();if(!l)return;
   const n=UPL.art==='reel'?((document.getElementById('uplNotiz')||{}).value||''):'';const args=['icloud',l,'--art',UPL.art];if(n)args.push('--notizen',n);
@@ -1357,7 +1357,17 @@ function uplArtWahl(a){UPL.art=a;
   uplKarPruefen();
   const c=document.getElementById('uplCutter'); if(c){c.hidden=(a==='heute'); if(a==='heute'){UPL.zusatz=[];const z=document.getElementById('uplZ');if(z)z.textContent='–';const n=document.getElementById('uplNotiz');if(n)n.value=''}}
   document.querySelectorAll('#uplArt button').forEach(b=>{b.className='btn'+(b.dataset.art===a?'':' ghost');if(a==='heute'&&b.dataset.art==='heute'){b.style.background='var(--yellow)';b.style.color='var(--navy)'}else{b.style.background='';b.style.color=''}})}
-function uplSetVideo(inp){UPL.video=inp.files[0]||null;document.getElementById('uplV').textContent=UPL.video?UPL.video.name+' · '+Math.round(UPL.video.size/1e6)+' MB':'–';document.getElementById('uplGo').disabled=!UPL.video}
+// Anne 24.09.2026: Bea hat drei zusammengehoerende Schnipsel als drei Lieferungen hochgeladen,
+// weil nur eine Datei ging — am Ende lagen sie als drei Storys da statt als ein Reel. Mehrere
+// Dateien in EINER Lieferung sind der Normalfall, nicht die Ausnahme. Die Reihenfolge ist die
+// Auswahlreihenfolge; beim Senden bekommt jede Datei eine Nummer vorangestellt.
+function uplSetVideo(inp){UPL.videos=[...inp.files];UPL.video=UPL.videos[0]||null;
+  const v=document.getElementById('uplV');
+  if(!UPL.videos.length){v.textContent='–'}
+  else if(UPL.videos.length===1){v.textContent=UPL.video.name+' · '+Math.round(UPL.video.size/1e6)+' MB'}
+  else{const mb=Math.round(UPL.videos.reduce((a,f)=>a+f.size,0)/1e6);
+       v.textContent=UPL.videos.length+' Teile · '+mb+' MB — werden zu EINEM Beitrag zusammengefügt: '+UPL.videos.map(f=>f.name).join(' → ')}
+  document.getElementById('uplGo').disabled=!UPL.videos.length}
 function uplSetZusatz(inp){UPL.zusatz=[...inp.files];const z=document.getElementById('uplZ');if(z)z.textContent=UPL.zusatz.length?UPL.zusatz.map(f=>f.name).join(', '):'–';
   if(UPL.art==='karussell'){uplKarPruefen();const st=document.getElementById('uplStatus');if(st)st.textContent=UPL.zusatz.length+(UPL.karArt==='fertig'?' Slides':' Dateien')}}
 // Karussell: drei Wege in den Eingang (Anne 17.09.) — fertige Seiten, Rohmaterial mit Anweisungen, oder nur Anweisungen
@@ -1383,12 +1393,16 @@ async function uplSenden(key){
     st.textContent='Paket anlegen …';
     const meta=await fetch('/api/upload-paket'+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:UPL.video.name,art:UPL.art,notizen:UPL.art!=='heute'?(document.getElementById('uplNotiz')||{}).value||'':'',zusatz:UPL.art!=='heute'?UPL.zusatz.map(f=>f.name):[]})}).then(r=>r.json());
     if(!meta.ok)throw new Error(meta.error||'Paket');
-    const total=UPL.video.size+UPL.zusatz.reduce((a,f)=>a+f.size,0); let done=0;
-    await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=video&name=${encodeURIComponent(UPL.video.name)}`,UPL.video,p=>st.textContent='Video '+Math.round((done+p*UPL.video.size)/total*100)+' %'); done+=UPL.video.size;
+    const total=UPL.videos.reduce((a,f)=>a+f.size,0)+UPL.zusatz.reduce((a,f)=>a+f.size,0); let done=0;
+    for(let i=0;i<UPL.videos.length;i++){const f=UPL.videos[i];
+      // Nummer voran, damit die Reihenfolge auch auf der Gegenseite stimmt
+      const n=UPL.videos.length>1?String(i+1).padStart(2,'0')+'-'+f.name:f.name;
+      await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=video&name=${encodeURIComponent(n)}`,f,p=>st.textContent=(UPL.videos.length>1?`Teil ${i+1}/${UPL.videos.length} `:'Video ')+Math.round((done+p*f.size)/total*100)+' %');
+      done+=f.size}
     for(const f of (UPL.art!=='heute'?UPL.zusatz:[])){await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=zusatz&name=${encodeURIComponent(f.name)}`,f,p=>st.textContent='Zusatz '+Math.round((done+p*f.size)/total*100)+' %');done+=f.size}
     const fin=await fetch(`/api/upload-paket/fertig${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}`,{method:'POST'}).then(r=>r.json());
     st.textContent='✓ Hochgeladen';
-    UPL={art:UPL.art,video:null,zusatz:[]}; document.getElementById('uplV').textContent='–'; document.getElementById('uplZ').textContent='–'; document.getElementById('uplNotiz').value='';
+    UPL={art:UPL.art,video:null,videos:[],zusatz:[]}; document.getElementById('uplV').textContent='–'; document.getElementById('uplZ').textContent='–'; document.getElementById('uplNotiz').value='';
     if(typeof load==='function') load();
   }catch(e){st.textContent='Fehler: '+e.message; go.disabled=false}
 }

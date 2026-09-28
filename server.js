@@ -224,7 +224,17 @@ const server = http.createServer(async (req, res) => {
         const id = sauber(u.searchParams.get("paket")), art = u.searchParams.get("art") === "zusatz" ? "zusatz" : "video", name = sauber(decodeURIComponent(u.searchParams.get("name") || "datei"));
         if (!fs.existsSync(path.join(UPLOADS, id, "paket.json"))) return sendJSON(res, 404, { error: "Paket unbekannt" });
         const f = art === "zusatz" ? path.join(UPLOADS, id, "zusatz", name) : path.join(UPLOADS, id, name);
-        try { const n = await streamZu(req, f, MAX_UPLOAD); return sendJSON(res, 200, { ok: true, bytes: n }); } catch (e) { return sendJSON(res, 413, { error: e.message }); }
+        // „zu gross" allein sagt niemandem etwas — deshalb hier der volle Satz samt Ausweg.
+        // Das Formular prueft die Groesse inzwischen vorher; das hier faengt alte Formulare ab.
+        try { const n = await streamZu(req, f, MAX_UPLOAD); return sendJSON(res, 200, { ok: true, bytes: n }); }
+        catch (e) {
+          const zuGross = /zu gross/i.test(e.message || "");
+          return sendJSON(res, zuGross ? 413 : 500, {
+            error: zuGross
+              ? `Die Datei ist groesser als ${Math.round(MAX_UPLOAD / 1073741824)} GB und passt nicht durch. Schick sie stattdessen als iCloud-Link (in Fotos oder Dateien auf „Teilen" → „Link kopieren") und setz den Link ins Feld Notizen — dann holen wir das Video direkt bei Apple ab, ohne Groessengrenze.`
+              : `Das Hochladen ist abgebrochen (${e.message}). Bitte noch einmal versuchen; bleibt es dabei, schick den iCloud-Link.`,
+          });
+        }
       }
       if (p === "/api/upload-paket/fertig") {
         const id = sauber(u.searchParams.get("paket")); const mf = path.join(UPLOADS, id, "paket.json"); const meta = readJSON(mf, null);
