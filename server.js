@@ -13,6 +13,18 @@ const UPLOADS = path.join(DATA, "uploads");          // Relais: Nutzer laden hie
 fs.mkdirSync(ASSETS, { recursive: true }); fs.mkdirSync(UPLOADS, { recursive: true });
 const MAX_UPLOAD = 3 * 1024 * 1024 * 1024;
 const sauber = (s) => String(s || "").replace(/[^\w.\-äöüÄÖÜß ]+/g, "_").slice(0, 120) || "datei";
+// Vergleicht die angekuendigten Dateien mit dem, was auf der Platte liegt (Name + Groesse).
+function abgleich(dir, erwartet) {
+  const angekommen = [], fehlt = [];
+  for (const e of erwartet) {
+    const f = e.art === "zusatz" ? path.join(dir, "zusatz", e.name) : path.join(dir, e.name);
+    let n = -1; try { n = fs.statSync(f).size; } catch {}
+    if (n < 0) fehlt.push({ name: e.name, art: e.art, grund: "nicht angekommen" });
+    else if (e.bytes && n !== e.bytes) fehlt.push({ name: e.name, art: e.art, grund: `unvollstaendig (${(n / 1e6).toFixed(1)} von ${(e.bytes / 1e6).toFixed(1)} MB)` });
+    else angekommen.push({ name: e.name, art: e.art, bytes: n });
+  }
+  return { angekommen, fehlt };
+}
 function streamZu(req, file, limit) {
   return new Promise((ok, bad) => {
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -237,9 +249,13 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST") {
       if (p === "/api/upload-paket") {
         const b = JSON.parse((await readBody(req)).toString("utf8") || "{}");
-        const id = "upload-" + new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "-") + "-" + sauber(path.parse(b.name || "video").name).replace(/\s+/g, "-").toLowerCase();
+        const id = "upload-" + new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "-") + "-" + sauber(path.parse(b.name || "video").name).replace(/\s+/g, "-").toLowerCase()
+          // Zufallsendung: zwei Lieferungen in derselben Minute mit gleichem ersten Dateinamen
+          // landeten sonst im selben Ordner und ueberschrieben sich (gefunden 29.09.2026).
+          + "-" + Math.random().toString(36).slice(2, 6);
         const art = ["reel", "story", "heute"].includes(b.art) ? b.art : "reel";
-        writeJSON(path.join(UPLOADS, id, "paket.json"), { id, name: b.name, art, absender: b.absender || "", notizen: b.notizen || "", zusatz: b.zusatz || [], eingang: new Date().toISOString(), status: "offen", quelle: "online" });
+        const erwartet = (Array.isArray(b.erwartet) ? b.erwartet : []).map((e) => ({ name: sauber(e.name), art: e.art === "zusatz" ? "zusatz" : "video", bytes: Number(e.bytes) || 0 }));
+        writeJSON(path.join(UPLOADS, id, "paket.json"), { id, name: b.name, art, absender: b.absender || "", notizen: b.notizen || "", zusatz: b.zusatz || [], erwartet, eingang: new Date().toISOString(), status: "offen", quelle: "online" });
         return sendJSON(res, 200, { ok: true, id });
       }
       if (p === "/api/upload-paket/datei") {
@@ -261,7 +277,13 @@ const server = http.createServer(async (req, res) => {
       if (p === "/api/upload-paket/fertig") {
         const id = sauber(u.searchParams.get("paket")); const mf = path.join(UPLOADS, id, "paket.json"); const meta = readJSON(mf, null);
         if (!meta) return sendJSON(res, 404, { error: "Paket unbekannt" });
-        meta.status = "bereit"; writeJSON(mf, meta); return sendJSON(res, 200, { ok: true, id, art: meta.art });
+        // Abgleich (29.09.2026): Die Bestaetigung kommt vom Server, nicht von der Seite. Sams
+        // Live-Analyse (7 Videos) kam am 28.09. als ein einziges an — die alte Seite nahm nur das
+        // erste und meldete trotzdem „Angekommen". Fehlt etwas, bleibt das Paket offen (der Mac
+        // holt keine halbe Lieferung ab) und die Seite zeigt rot, was fehlt.
+        const pruef = abgleich(path.join(UPLOADS, id), meta.erwartet || []);
+        if (pruef.fehlt.length) return sendJSON(res, 409, { ok: false, id, ...pruef });
+        meta.status = "bereit"; writeJSON(mf, meta); return sendJSON(res, 200, { ok: true, id, art: meta.art, ...pruef });
       }
       if (p.startsWith("/api/upload")) return sendJSON(res, 400, { error: "nicht verfuegbar" });
       let body = {}; try { body = JSON.parse((await readBody(req)).toString("utf8") || "{}"); } catch {}

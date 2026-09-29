@@ -103,6 +103,10 @@ bind($('#dropV'),$('#video'),fs=>{
 });
 bind($('#dropZ'),$('#zusatz'),fs=>{zusatz=zusatz.concat(fs);$('#listZ').innerHTML=zusatz.map(f=>`<div><span>${f.name}</span><span>${mb(f.size)}</span></div>`).join('')});
 function put(url,file,onProg){return new Promise((res,rej)=>{const x=new XMLHttpRequest();x.open('POST',url);x.upload.onprogress=e=>onProg&&onProg(e.loaded/e.total);x.onload=()=>x.status<300?res(JSON.parse(x.responseText)):rej(new Error(x.responseText||x.status));x.onerror=()=>rej(new Error('Netzwerkfehler'));x.send(file)})}
+// Laenge eines Videos im Browser messen (nur fuer die Bestaetigung, 0 wenn es nicht klappt).
+const dauer=f=>new Promise(r=>{try{const v=document.createElement('video'),u=URL.createObjectURL(f);v.preload='metadata';const fertig=d=>{URL.revokeObjectURL(u);r(d)};v.onloadedmetadata=()=>fertig(isFinite(v.duration)?v.duration:0);v.onerror=()=>fertig(0);setTimeout(()=>fertig(0),8000);v.src=u}catch{r(0)}});
+const minSek=s=>Math.floor(s/60)+':'+String(Math.round(s%60)).padStart(2,'0');
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const artJetzt=()=>(document.querySelector('input[name=art]:checked')||{}).value||'reel';
 $('#senden').onclick=async()=>{
   if(!videos.length)return; const btn=$('#senden'); btn.disabled=true; $('#err').textContent=''; $('#ok').hidden=true; const bar=$('#bar'); bar.hidden=false; const fill=bar.querySelector('i');
@@ -112,7 +116,7 @@ $('#senden').onclick=async()=>{
   const beilagen=mitZusatz?zusatz:[];
   const q=`key=${encodeURIComponent(KEY)}`;
   try{
-    const meta=await fetch('/api/upload-paket?'+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:videos[0].name,teile:teile.map(t=>t.name),art,notizen:mitZusatz?$('#notizen').value:'',absender:$('#absender').value,zusatz:beilagen.map(f=>f.name)})}).then(r=>r.json());
+    const meta=await fetch('/api/upload-paket?'+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:videos[0].name,teile:teile.map(t=>t.name),erwartet:[...teile.map(t=>({name:t.name,art:'video',bytes:t.f.size})),...beilagen.map(f=>({name:f.name,art:'zusatz',bytes:f.size}))],art,notizen:mitZusatz?$('#notizen').value:'',absender:$('#absender').value,zusatz:beilagen.map(f=>f.name)})}).then(r=>r.json());
     if(!meta.ok)throw new Error(meta.error||'Paket konnte nicht angelegt werden');
     const total=teile.reduce((a,t)=>a+t.f.size,0)+beilagen.reduce((a,f)=>a+f.size,0); let done=0;
     const datei=async(f,name,wie)=>{
@@ -123,13 +127,27 @@ $('#senden').onclick=async()=>{
       }
       done+=f.size;
     };
+    const laengen=Promise.all(teile.map(t=>dauer(t.f)));
     for(const t of teile) await datei(t.f,t.name,'video');
     for(const f of beilagen) await datei(f,f.name,'zusatz');
-    const ende=await fetch(`/api/upload-paket/fertig?${q}&paket=${encodeURIComponent(meta.id)}`,{method:'POST'}).then(r=>r.json());
+    // Die Bestaetigung kommt vom Server: er vergleicht, was angekuendigt war, mit dem, was da ist.
+    const fertigMelden=()=>fetch(`/api/upload-paket/fertig?${q}&paket=${encodeURIComponent(meta.id)}`,{method:'POST'}).then(r=>r.json());
+    let ende=await fertigMelden();
+    if(ende&&ende.fehlt&&ende.fehlt.length){            // einmal nachschicken, was fehlt
+      for(const x of ende.fehlt){const t=teile.find(t=>t.name===x.name)||{f:beilagen.find(f=>f.name===x.name),name:x.name}; if(t.f){done=Math.max(0,done-t.f.size); await datei(t.f,t.name,x.art)}}
+      ende=await fertigMelden();
+    }
+    if(ende&&ende.fehlt&&ende.fehlt.length){
+      bar.hidden=true;
+      $('#err').innerHTML=HINWEIS(`<b>Nicht alles ist angekommen.</b> ${(ende.angekommen||[]).filter(a=>a.art==='video').length} von ${teile.length} Videos sind da. Es fehlt:<br>${ende.fehlt.map(x=>'· '+esc(x.name)+' — '+esc(x.grund)).join('<br>')}<br>Bitte auf „Hochladen" tippen und es noch einmal schicken. Die Lieferung wird erst verarbeitet, wenn alles da ist.`,'rot');
+      btn.disabled=false; return;
+    }
     if(ende&&ende.error)throw new Error(ende.error);
+    const sek=(await laengen).reduce((a,d)=>a+d,0);
+    const da=(ende.angekommen||[]).filter(a=>a.art==='video');
     fill.style.width='100%'; $('#ok').hidden=false;
-    const was=teile.length>1?`${teile.length} Videos (werden zu einem Beitrag verbunden)`:`„${videos[0].name}“`;
-    $('#ok').innerHTML=`<b>Angekommen.</b> ${was}${beilagen.length?' + '+beilagen.length+' Zusatzdatei(en)':''} — ${art==='heute'?'Story bekommt jetzt Untertitel und geht in wenigen Minuten online.':art==='story'?'liegt in der Story-Planung.':'liegt im Eingang und wird verarbeitet.'} Danke!`;
+    const liste=da.length?'<br>'+da.map(a=>'✓ '+esc(a.name)+' · '+mb(a.bytes)).join('<br>'):'';
+    $('#ok').innerHTML=`<b>Angekommen: ${da.length||teile.length} von ${teile.length} ${teile.length>1?'Videos':'Video'}${sek?' · '+minSek(sek)+' Min.':''}</b>${beilagen.length?' + '+beilagen.length+' Zusatzdatei(en)':''}${liste}<br>${teile.length>1?'Die Teile werden zu einem Beitrag verbunden. ':''}${art==='heute'?'Die Story bekommt jetzt Untertitel und geht in wenigen Minuten online.':art==='story'?'Liegt in der Story-Planung.':'Liegt im Eingang und wird verarbeitet.'} Danke!`;
     videos=[]; zusatz=[]; $('#listV').innerHTML=''; $('#listZ').innerHTML=''; $('#notizen').value='';
   }catch(e){let m=e.message;try{m=JSON.parse(m).error||m}catch{};$('#err').textContent='Fehler: '+m; btn.disabled=false}
 };
