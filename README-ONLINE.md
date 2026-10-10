@@ -5,7 +5,7 @@
 ## Einrichtung (erledigt am 16.09.2026)
 
 Das Tool besteht aus zwei Teilen: der **Oberfläche** (diese App, läuft beim Hoster) und der **Engine**
-(Transkript, Schnitt, CapCut-Projekte), die auf einem Rechner läuft und alle 60 Sekunden mit der
+(Transkript, Schnitt, Vorschnitt-Pakete), die auf einem Rechner läuft und alle 60 Sekunden mit der
 Oberfläche abgleicht. Nutzer sehen nur die Online-Adresse.
 
 ## 1a. Kostenfrei: Render (Anne)

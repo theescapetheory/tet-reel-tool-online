@@ -1053,7 +1053,6 @@ tr:last-child td{ border-bottom:0; }
   <button class="nav-item" data-v="eingang">Rohmaterial</button>
   <button class="nav-item" data-v="vorschnitt">Vorschnitt</button>
   <button class="nav-item" data-v="studio">Schnittstudio</button>
-  <button class="nav-item" data-v="schnitt" id="navSchnitt" hidden>Schnitt (CapCut)</button>
 </div></div>
 <div class="navgruppe" data-g="kar"><button class="navkopf" onclick="navGruppe('kar')">Karussells<span>▾</span></button><div class="navkinder">
   <button class="nav-item" data-v="karRoh">Rohmaterial</button>
@@ -1148,57 +1147,9 @@ function mitLinks(t){
   return esc(String(t||'')).replace(/(https?:\/\/[^\s<]+)/g,
     '<a class="netz" href="$1" target="_blank" rel="noopener">$1</a>');
 }
-// „In CapCut bearbeiten" liefert das FERTIGE CapCut-Projekt — alle Ebenen, Kamerafahrten, Grafiken,
-// Untertitel. Zwei Wege, weil CapCuts Cloud-Synchronisierung ausfallen kann (17.09.: sie stand auf aus):
-//  1. capcut-paket: ZIP mit Projekt + Material + Installer in die Dropbox. Entpacken, Doppelklick, fertig.
-//     Funktioniert unabhaengig von Konto und Cloud — das ist der verlaessliche Weg.
-//  2. capcut-draft: baut das Projekt auf dem Mac; bei eingeschalteter Projektsynchronisierung erscheint
-//     es direkt in CapCut bei jedem, der mit dem Marketing-Zugang angemeldet ist.
-function capcutFenster(titel, html){
-  const d=document.createElement('div'); d.className='fenster'; d.id='aufDetail';
-  d.innerHTML=`<div class="box" style="width:min(680px,95vw);max-height:88vh;overflow:auto">
-    <div class="row" style="justify-content:space-between;align-items:baseline">
-      <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:19px;margin:0">${titel}</h2>
-      <button class="btn ghost" onclick="document.getElementById('aufDetail').remove()">schließen</button></div>
-    ${html}</div>`;
-  d.onclick=(e)=>{if(e.target===d)d.remove()};
-  document.body.appendChild(d);
-}
-// „In CapCut bearbeiten" — Nico drueckte den Knopf und es passierte nichts (Anne 28.09.). Zwei Ursachen:
-// eine zweite, aeltere Fassung dieser Funktion ueberschrieb sie, und sie baute nur den Draft auf Annes
-// Mac. Jetzt: erst nachsehen, ob das Projekt schon in der Dropbox liegt — bei 73 von 75 Reels tut es das,
-// dann ist es sofort da statt nach Minuten. Nur wenn es fehlt, wird gebaut.
-async function capcutOeffnen(pfad, slug){
-  const u = await api('/api/capcut-uebergabe?dir=' + encodeURIComponent(pfad));
-  if(u && u.da){
-    // Dieses Projekt vorziehen — der Empfang beim Cutter nimmt Angefordertes zuerst
-    post('/api/capcut-anfordern', {slug: u.slug});
-    // Laeuft bei irgendwem ein Empfang? Bis 28.09. behauptete dieses Fenster „schon in CapCut",
-    // ohne es zu wissen. Jetzt steht hier, wer sich wann zuletzt gemeldet hat — und woran es hakt.
-    const em=(u.empfaenger||[]).map(e=>{
-      const frisch=e.minuten_her<=3;
-      const wann=e.minuten_her<1?'gerade eben':e.minuten_her<90?'vor '+e.minuten_her+' Min.':'zuletzt '+esc(String(e.zeit).slice(0,16).replace('T',' '));
-      return `<div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;margin-top:8px;font-size:13px"><b>${esc(e.rechner)}</b> · ${frisch?'Empfang läuft':'Empfang meldet sich nicht mehr'} · ${wann}${e.capcut_offen?' · CapCut ist offen, Projekt erscheint nach Neustart von CapCut':''}${(e.wartet||[]).length?'<br>'+e.wartet.map(esc).join('<br>'):''}${(e.fehler||[]).length?'<br><span style="color:#b3261e">'+e.fehler.map(esc).join('<br>')+'</span>':''}</div>`}).join('');
-    capcutFenster('CapCut-Projekt: ' + (slug||u.slug), `
-      <div class="sec"><h2>Empfang</h2>${em||'<p style="font-size:13px">Auf keinem Rechner läuft der Empfang. Das Projekt kommt nur über den Weg „von Hand" unten nach CapCut, bis er einmal eingerichtet ist.</p>'}</div>
-      <p style="font-size:13px;margin:10px 0 0">Das fertige Projekt liegt bereit — alle Ebenen: ein Clip je Kamera-Einstellung, Punch-Zooms als Keyframes, Titel und Inserts als Text- und Bild-Ebenen, jede Caption eine eigene Text-Ebene, SFX als Tonspur.</p>
-      <div class="sec"><h2>So ist es in einer halben Minute in CapCut</h2>
-      <p style="font-size:13px">Läuft der Empfang auf deinem Mac, ist das Projekt <b>schon in CapCut</b> — Liste oben, Name <code>${u.projekt}</code>. Sonst einmalig einrichten:</p>
-      ${u.empfang?`<p style="font-size:13px"><a class="netz" href="${u.empfang}" target="_blank" rel="noopener">Ordner „_EINMAL-EINRICHTEN" öffnen</a> → auf den eigenen Mac ziehen → Doppelklick auf „escape-studio Empfang einrichten.command". Ab dann erscheint jedes neue Projekt von selbst, alle 30 Sekunden wird nachgesehen.</p>`:''}
-      </div>
-      <div class="sec"><h2>Ohne Empfang, von Hand</h2>
-      <p style="font-size:13px"><a class="netz" href="${u.weblink}" target="_blank" rel="noopener">Projektordner in der Dropbox öffnen</a> → Doppelklick auf „CapCut-Projekt oeffnen.command". Beim ersten Mal blockt macOS: „Fertig" → Systemeinstellungen → Datenschutz &amp; Sicherheit → „Trotzdem öffnen".</p></div>
-      <div class="sec"><h2>Fertig? Dann einfach exportieren</h2>
-      <p style="font-size:13px">Mit eingerichtetem Empfang ist der <b>Zielordner egal</b> — Downloads, Movies/CapCut oder „TET Freigabe". Der Export wird am Namen erkannt und landet von selbst unter „3 · Freigegeben". Den Namen, den CapCut vorschlägt, stehen lassen.</p>
-      <p style="font-size:13px">Im Export-Fenster: <b>Auflösung 1080p</b> — nicht 2K, das Projekt ist 1080×1920 und wird sonst nur größer gerechnet. Format mp4, 30 fps, H.264.</p>
-      <p style="font-size:13px;color:var(--grey)">Ohne Empfang: in den Dropbox-Ordner <b>Reels-Freigabe</b> exportieren, Dateiname muss <code>${slug||u.slug}</code> enthalten.</p></div>`);
-    return;
-  }
-  capcutFenster('CapCut-Projekt wird gebaut', `
-    <p style="font-size:13px;margin:10px 0 0">Für <b>${slug||''}</b> liegt noch kein fertiges Projekt in der Dropbox. Es wird jetzt gebaut — das dauert ein bis zwei Minuten. Danach diesen Knopf noch einmal drücken, dann steht hier der Link.</p>`);
-  if (!window.HOSTED) job(['capcut-draft', pfad], 'CapCut auf diesem Mac öffnen');
-  job(['capcut-paket', pfad], 'CapCut-Projekt in die Dropbox');
-}
+// Vorschnitt ans Schnittstudio geben (Ue-EIN). Die Automatik legt das Paket nach jedem Bau von selbst ab;
+// der Knopf baut es neu, z. B. nach einer Aenderung am Vorschnitt. CapCut ist seit 10.10.2026 raus.
+function schnittstudioPaket(pfad){ job(['schnittstudio-paket', pfad], 'Paket fürs Schnittstudio bauen'); }
 // Material, das nicht auf Instagram gehoert (z. B. ein Clip fuer den Circle), aus der Auswahl nehmen.
 // Die Datei bleibt liegen — nur die Anzeige verschwindet, damit nichts unwiederbringlich weg ist.
 async function matAussortieren(id, titel){
@@ -1248,7 +1199,7 @@ async function load(){
   render();
 }
 // Gruppenkopf ist nur ein Reiter zum Auf- und Zuklappen, dahinter liegt keine Seite (Anne 17.09.)
-const NAV_GRUPPE={eingang:'reels',vorschnitt:'reels',studio:'reels',schnitt:'reels',session:'reels',reel:'reels',
+const NAV_GRUPPE={eingang:'reels',vorstudio:'reels',session:'reels',reel:'reels',
   karRoh:'kar',karFrei:'kar',karussell:'kar',storyRoh:'story',storyFrei:'story',storyroh:'story'};
 function navGruppe(g,zustand){
   const el=document.querySelector(`.navgruppe[data-g="${g}"]`); if(!el)return;
@@ -1257,7 +1208,7 @@ function navGruppe(g,zustand){
   try{const st=JSON.parse(localStorage.getItem('navZu')||'{}');st[g]=zu;localStorage.setItem('navZu',JSON.stringify(st))}catch{}
 }
 const NAV_TITEL={ueber:'Übersicht',upload:'Upload',eingang:'Reels · Rohmaterial',vorschnitt:'Reels · Vorschnitt',
-  studio:'Reels · Schnittstudio',schnitt:'Reels · Schnitt',session:'Reels · Session',reel:'Reels · Reel',
+  studio:'Reels · Schnittstudio',session:'Reels · Session',reel:'Reels · Reel',
   karRoh:'Karussells · Rohmaterial',karFrei:'Karussells · Freigabe',karussell:'Karussells',
   storyRoh:'Storys · Rohmaterial',storyFrei:'Storys · Freigabe',storyroh:'Storys · Rohmaterial',
   plan:'Contentplan',kpi:'KPI',lernen:'Lernsystem intern'};
@@ -1269,12 +1220,11 @@ function nav(v,extra){view=v;Object.assign(cur,extra||{});
   render()}
 document.querySelectorAll('nav button[data-v]').forEach(b=>b.onclick=()=>nav(b.dataset.v));
 try{const st=JSON.parse(localStorage.getItem('navZu')||'{}');Object.entries(st).forEach(([g,zu])=>{if(zu)navGruppe(g,false)})}catch{}
-if(window.tetDesktop){const nb=document.getElementById('navSchnitt');if(nb)nb.hidden=false}
 async function sessionEntfernen(id){if(!confirm('Diesen Upload aus dem Eingang entfernen? (Datei wird verschoben, nicht gelöscht)'))return;const r=await post('/api/session-entfernen',{id});toast(r.ok?'Entfernt':'Fehler: '+(r.error||''));nav('eingang')}
 async function uploadLink(){const d=await api('/api/upload-link');if(!d.link)return toast('Kein Upload-Schlüssel gesetzt');try{await navigator.clipboard.writeText(d.link)}catch{}toast('Upload-Link kopiert: '+d.link,12000)}
 async function uploadFrei(inp){const f=inp.files[0];if(!f)return;toast('Lade fertige Fassung hoch … ('+Math.round(f.size/1e6)+' MB)');
  const r=await fetch('/api/upload-frei?session='+encodeURIComponent(cur.session)+'&slug='+encodeURIComponent(cur.slug),{method:'POST',body:f});const d=await r.json();
- toast(d.ok?'✓ CapCut-Fassung liegt in 3 · Freigegeben — bereit für den Contentplan.':'Fehler beim Upload');load()}
+ toast(d.ok?'✓ Fertige Fassung liegt in 3 · Freigegeben — bereit für den Contentplan.':'Fehler beim Upload');load()}
 async function upload(inp){const f=inp.files[0];if(!f)return;toast('Lade „'+f.name+'“ hoch … ('+Math.round(f.size/1e6)+' MB)');
  const r=await fetch('/api/upload?name='+encodeURIComponent(f.name),{method:'POST',body:f});const d=await r.json();
  toast(d.ok?'✓ Hochgeladen — liegt im Eingang als „'+d.id+'“':'Fehler beim Upload');load()}
@@ -1318,9 +1268,6 @@ function render(){
 function renderRoh(){
   const m=$('#main'); if(!S){m.innerHTML='<p>lädt …</p>';return}
   {let n=0;const t=setInterval(()=>{const b=document.getElementById('uplBox');if(b&&!b.children.length){uplFormular('uplBox','');claudeZugang()}if((b&&b.children.length)||++n>60)clearInterval(t)},100)}  // Übersicht lädt asynchron
-  document.body.classList.toggle('schnitt',view==='schnitt');
-  if(window.tetDesktop) window.tetDesktop.capcut(view==='schnitt');
-  if(view==='schnitt') return vSchnitt(m);
   if(view==='ueber') return vUeber(m);
   if(view==='eingang') return m.innerHTML=vEingang();
   if(view==='storyroh') return vStoryRoh(m);
@@ -1587,32 +1534,6 @@ function vFrei(m){
   m.innerHTML='<h1>Freigegebener Content</h1><div class="grid" id="freigrid">lädt …</div>';
   api('/api/frei').then(d=>{const g=$('#freigrid');if(!g)return;g.innerHTML=(d.reels||[]).map(r=>`<div class="card"><span class="pill freigegeben">freigegeben</span><h3 style="margin-top:8px">${esc(r.titel)}</h3><div class="meta">CTA ${esc(r.cta||'–')}</div><p style="font-size:13px;color:var(--grey);margin:8px 0">${esc(r.caption)}…</p><video controls preload="metadata" style="max-width:100%" src="/ready/${encodeURIComponent(r.slug)}/reel.mp4"></video><div class="row" style="margin-top:10px"><button class="btn" onclick="nav('plan')">In den Contentplan →</button></div></div>`).join('')||''});
 }
-async function capcutWebImport(dir){if(!window.tetDesktop)return toast('Nur in der TET-Studio-App');toast('Lade Material in CapCut Web …',8000);const r=await window.tetDesktop.oeffnen(dir);toast(r.ok?'✓ '+r.anzahl+' Videos im CapCut-Medienfenster.':'Import fehlgeschlagen: '+(r.grund||''),9000)}
-async function vSchnitt(m){
- // Desktop-Hülle: links diese Leiste, rechts CapCut Web eingebettet (BrowserView, gleicher Login wie capcut.com).
- // Auch Reels zeigen, die gerade gebaut werden — sonst verschwinden sie waehrend des Renders aus der Liste
- // (Anne 16.09.: „ich finde den vorschnitt von claudia im tool nicht").
- const alle=S.sessions.flatMap(s=>s.reels.map(r=>({...r,session:s.id})));
- if(!cur.slug||!alle.find(r=>r.slug===cur.slug&&r.session===cur.session)){
-  m.innerHTML=`<h1>Schnitt</h1>
-  ${alle.map(r=>`<div class="card" style="margin:8px 0;cursor:pointer" onclick="nav('schnitt',{session:'${esc(r.session)}',slug:'${esc(r.slug)}'})"><b>${esc(r.titel)}</b><div class="meta">${esc(r.session)} · ${r.dauer_s?Math.round(r.dauer_s)+' s':''}</div></div>`).join('')||''}`;
-  return;
- }
- const dir=WORKP(cur.session)+'/reels/'+cur.slug;
- const ant=await api('/api/reel/'+encodeURIComponent(cur.session)+'/'+encodeURIComponent(cur.slug)); const reel=(ant&&ant.reel)||ant||{};
- const red=(reel&&reel.redaktion)||{}; const off=+((reel&&reel.quelle&&reel.quelle.offset_s)||0);
- const segs=(red.segmente||[]).map((s0,k)=>`${String(k+1).padStart(2,' ')}  ${(s0.start-off).toFixed(1).padStart(6)} – ${(s0.end-off).toFixed(1).padStart(6)} s  ${esc((s0.text||'').slice(0,60))}`).join('\n');
- m.innerHTML=`<div class="row" style="justify-content:space-between"><button class="btn ghost" onclick="nav('vorschnitt')">← Vorschnitt</button><span class="meta">${esc(cur.slug)}</span></div>
- <h1 style="margin-top:10px">${esc(red.titel||cur.slug)}</h1>
- <div class="sub">Hook: ${esc(red.hook||'–')} · CTA <b>${esc((red.cta&&red.cta.keyword)||'–')}</b></div>
- <div class="row" style="margin:12px 0"><button class="btn" onclick="capcutOeffnen('${esc(dir)}','${esc(cur.slug)}')">▶ Projekt in CapCut öffnen (Desktop, mit Ebenen)</button><button class="btn ghost" onclick="capcutWebImport('${esc(dir)}')">nur Material in CapCut Web</button><button class="btn ghost" onclick="job(['dropbox-uebergabe','${esc(dir)}'],'An CapCut übergeben');toast('Quelle + Vorschnitt + Untertitel liegen gleich in Dropbox „Reels-Uebergabe/${esc(cur.slug)}“ — rechts in CapCut: Import → Dropbox.',9000)">☁︎ Material nach Dropbox</button></div>
- <div class="meta" style="margin-top:6px"><b>In CapCut Desktop</b><br>„Projekt öffnen“ baut ein echtes Projekt mit allen Ebenen: ein Clip je Kamera-Einstellung (verlängerbar), Punch-Zooms als Keyframes, Titel/Typecards/Inserts als Text- und Bild-Ebenen, jede Caption eine Text-Ebene (Akzentwort gelb), SFX als Tonspur — alles editierbar.<br>Export 1080×1920 → Dropbox <b>Reels-Freigabe</b> (oder ~/Movies/TET Freigabe) → landet automatisch in 3 · Freigegeben</div>
- <div class="segl" style="font-size:11px">${esc(dir)}/capcut-paket/</div>
- <div class="segl">${segs||'(keine Segmente)'}</div>
- <div class="meta"><b>Stil</b> · Captions unten, Jost 700, Akzentwort #FDDF5B · Tayler / The Escape Theory · CTA nur 222 / ANALYSE</div>
- <details style="margin-top:10px"><summary class="meta">Caption für Instagram</summary><div class="segl">${esc(red.caption_ig||'')}\n\nKommentiere ${esc((red.cta&&red.cta.keyword)||'')}\n\n${esc(red.hashtags||'')}</div></details>
- <div id="joblog" class="segl" style="max-height:120px;overflow:auto"></div>`;
-}
 function vVorschnitt(){
  // Anne 28.08.: Vorschnitt = Übersicht der fertigen Reels; EIN Klick öffnet das Schnittstudio (Reel-Detail).
  const alle=S.sessions.flatMap(s=>s.reels.filter(r=>r.gerendert).map(r=>({...r,session:s.id})));
@@ -1622,11 +1543,11 @@ function vVorschnitt(){
  ${Object.keys(grp).length?Object.entries(grp).map(([sid,reels])=>`
   <div class="sec" style="border:0;padding:0;margin-top:18px"><h2>${esc(sid)}</h2></div>
   <div class="grid">${reels.map(r=>`
-   <div class="card" onclick="nav(window.tetDesktop?'schnitt':'reel',{session:'${esc(sid)}',slug:'${esc(r.slug)}'})">
+   <div class="card" onclick="nav('reel',{session:'${esc(sid)}',slug:'${esc(r.slug)}'})">
     <div class="row" style="justify-content:space-between"><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span><span class="meta">${r.dauer_s?Math.round(r.dauer_s)+' s':''}</span></div>
     <h3 style="margin-top:8px">${esc(r.titel)}</h3>
     <div class="meta">${r.gerendert?`Viral ${r.viral?r.viral.score+'/'+r.viral.schwelle:'–'} · CTA ${esc(r.cta||'–')}`:'wird gerade gebaut …'}</div>
-    <div class="row" style="margin-top:10px"><button class="btn btn-primary" onclick="event.stopPropagation();capcutOeffnen('${esc(WORKP(sid))}/reels/${esc(r.slug)}','${esc(r.slug)}')">▶ In CapCut bearbeiten</button>${window.HOSTED?'':`<button class="btn ghost" onclick="event.stopPropagation();job(['capcut-draft','${esc(WORKP(sid))}/reels/${esc(r.slug)}'],'CapCut lokal öffnen')">auf diesem Mac öffnen</button>`}</div>
+    <div class="row" style="margin-top:10px"><button class="btn btn-primary" onclick="event.stopPropagation();schnittstudioPaket('${esc(WORKP(sid))}/reels/${esc(r.slug)}')">▶ Ans Schnittstudio geben</button></div>
    </div>`).join('')}</div>`).join(''):''}`;
 }
 function vEingang(){
@@ -1793,7 +1714,6 @@ function vStudio(m){
     <div class="gr" style="border:0">Projekt gespeichert <b>gerade eben</b></div>
     <div style="margin-left:auto;display:flex;gap:6px">
       <button class="btn ghost" style="font-size:11.5px;padding:6px 11px">Untertitel neu</button>
-      <button class="btn ghost" style="font-size:11.5px;padding:6px 11px">In CapCut öffnen</button>
       <button class="btn" style="font-size:11.5px;padding:6px 11px">Zur Freigabe →</button>
     </div>
   </div>
@@ -2269,7 +2189,7 @@ async function vReel(m){
   m.innerHTML=`<h1>${esc(d.titel)}</h1>
   <div class="sub">${esc(cur.session)} · ${esc(d.typ||'')} · ${esc(d.variante||'')} · CTA <b>${esc(d.cta||'')}</b> · ${d.spec.frames?Math.round(d.spec.frames/30)+' s · '+d.spec.kamera+' Kamera-Keys · '+d.spec.uebergaenge+' Übergänge · '+d.spec.grafiken.length+' Grafiken':'noch nicht gebaut'}</div>
   <div class="row" style="margin-bottom:10px;align-items:center">
-    <button class="btn btn-primary" onclick="capcutOeffnen('${esc(dir)}','${esc(cur.slug)}')">▶ In CapCut bearbeiten</button>
+    <button class="btn btn-primary" onclick="schnittstudioPaket('${esc(dir)}')">▶ Ans Schnittstudio geben</button>
     <button class="btn" onclick="job(['publish','${esc(dir)}'],'Freigeben')" title="Vorschnitt so freigeben, wie er ist">Freigeben</button>
     <label class="btn btn-ghost" style="cursor:pointer" title="Ein außerhalb geschnittenes Video hochladen — es ersetzt den Vorschnitt">Fertige Fassung hochladen<input type=file accept=video/mp4 style=display:none onchange="uploadFrei(this)"></label>
     <button class="btn btn-ghost" onclick="reelTechnik()" title="Technische Werte und Einzelschritte">Technik …</button>
@@ -2282,10 +2202,7 @@ async function vReel(m){
     <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['viral','${esc(dir)}'],'Viral-Score')">Score neu rechnen</button>
     <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['straffen','${esc(dir)}','--probe'],'Pausen prüfen')">Pausen prüfen</button>
     <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['straffen','${esc(dir)}'],'Pausen entfernen')">Pausen entfernen</button>
-    <button class="btn ghost" ${d.status==='bereit'||d.status==='freigegeben'?'':'disabled'} onclick="job(['schedule','${esc(dir)}'],'Einplanen (Metricool)')">Einplanen</button>
-    ${window.HOSTED?'':`<button class="btn ghost" onclick="job(['capcut-draft','${esc(dir)}'],'CapCut-Projekt bauen')">CapCut auf diesem Mac öffnen</button>`}
-    <button class="btn ghost" onclick="job(['capcut-paket','${esc(dir)}'],'CapCut-Paket bauen')">CapCut-Paket bauen</button>
-    ${window.HOSTED?'':`<a class="btn ghost" style="text-decoration:none" href="${base}/capcut-draft-paket.zip" download>Paket laden</a>`}</div>
+    <button class="btn ghost" ${d.status==='bereit'||d.status==='freigegeben'?'':'disabled'} onclick="job(['schedule','${esc(dir)}'],'Einplanen (Metricool)')">Einplanen</button></div>
   <div class="two"><div>
     ${videoFeld(d, base)}
     <div class="sec"><h2>Schnitt · Etappe 1</h2><div id="schnitt" class="meta">lädt …</div></div>
@@ -2663,7 +2580,7 @@ function vPlan(){
   materialFrisch(true).then((xs)=>{
     if(view==='plan' && (xs.length!==vorher || !vorher)){render();setTimeout(()=>window.matRender&&window.matRender(),80)}
   }).catch(()=>{});
-  // Anne 14.09.: Contentplan = Kalender + Redaktionsplan + ALLE freigegebenen Reels (CapCut-Export = freigegeben). Kein Reiter „Freigegeben" mehr.
+  // Anne 14.09.: Contentplan = Kalender + Redaktionsplan + ALLE freigegebenen Reels (Export = freigegeben). Kein Reiter „Freigegeben" mehr.
   const p=S.plan||{slots:{},reels:[]}; const days=[...Array(7)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d});
   const rp=S.redaktionsplan||[];
   const mk=S.metricool_kalender||null;
