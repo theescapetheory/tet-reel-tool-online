@@ -1550,6 +1550,14 @@ function vVorschnitt(){
     <div class="row" style="margin-top:10px"><button class="btn btn-primary" onclick="event.stopPropagation();schnittstudioPaket('${esc(WORKP(sid))}/reels/${esc(r.slug)}')">▶ Ans Schnittstudio geben</button></div>
    </div>`).join('')}</div>`).join(''):''}`;
 }
+// Automatik je Aufnahme: steht sie, steht hier in einem Satz, warum — und wann es weitergeht.
+const AUTO_WORT={wartet:'wartet',gescheitert:'steht',offen:'in der Reihe',laeuft:'läuft',fertig:'durch',aussortiert:'aussortiert'};
+function automatikZeile(a){
+  if(!a||!a.stand||a.stand==='fertig') return '';
+  const farbe=a.stand==='gescheitert'?'var(--red)':a.stand==='wartet'?'var(--camel)':'var(--grey)';
+  const wann=a.nicht_vor?' · nächster Versuch '+esc(String(a.nicht_vor).slice(11,16))+' Uhr':'';
+  return `<div class="meta" style="margin:4px 0;color:${farbe}"><span style="font-weight:700">Automatik ${AUTO_WORT[a.stand]||esc(a.stand)}</span>${a.grund?' — '+esc(a.grund):''}${a.grund&&/nächster Versuch in/.test(a.grund)?'':wann}</div>`;
+}
 function vEingang(){
   const neu=S.sessions.filter(s=>s.status==='neu').length, inArbeit=S.sessions.filter(s=>!['neu','gepostet','kpi'].includes(s.status)).length;
   const reels=S.sessions.flatMap(s=>s.reels.map(r=>({...r,session:s.id})));
@@ -1560,6 +1568,7 @@ function vEingang(){
   <div class="grid">${S.sessions.map(s=>`<div class="card" onclick="nav('session',{session:'${esc(s.id)}'})" title="Projekt öffnen (Verarbeitung, Kandidaten)">
     <div class="row" style="justify-content:space-between"><span class="pill ${esc(s.status)}">${esc(LABEL[s.status]||s.status)}</span>${S.aktiv&&S.aktiv.session===s.id?'<span class="pill ok">läuft gerade</span>':''}<span class="meta">${esc(s.typ||'')} · ${esc(s.material||'')}</span></div>
     <h3 style="margin-top:10px">${esc(s.id)}</h3>
+    ${automatikZeile(s.automatik)}
     <div class="meta">${esc(s.datum||'')} ${s.dauer_s?'· '+Math.round(s.dauer_s/60)+' min':''} ${s.dateien?'· '+s.dateien+' Dateien':''} ${s.kandidaten?'· '+s.kandidaten+' Kandidaten':''} ${s.reels.length?'· '+s.reels.length+' Reels':''}</div>
     ${ladder(s.status)}<div style='height:7px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden'><i style='display:block;height:100%;width:${s.fortschritt??0}%;background:linear-gradient(90deg,var(--camel),var(--yellow))'></i></div><div class='meta' style='margin-top:4px'>${s.fortschritt??0} % verarbeitet</div></div>`).join('')}</div>
   ${S.jobs.length?`<div class="sec"><h2>Letzte Läufe</h2><table>${S.jobs.map(j=>`<tr><td>${esc(j.start.slice(11,16))}</td><td>tet-reel ${esc(j.cmd)}</td><td><span class="pill ${j.status==='fehler'?'fehler':j.status==='fertig'?'ok':''}">${esc(j.status)}</span></td></tr>`).join('')}</table></div>`:''}`;
@@ -2141,7 +2150,7 @@ function vSession(){
   api('/api/session/'+encodeURIComponent(s.id)).then(d=>{
     const vb=$('#verlauf');
     if(vb){const v=d.verlauf||[];
-      vb.innerHTML=(d.aktiv?`<div class="zuord" style="border-left-color:var(--green);background:#eefaf3;border-color:#bfe8cf"><b>Wird gerade bearbeitet</b> — seit ${d.aktiv.minuten??0} Min. <span class="meta" style="display:block;margin-top:4px">${esc((d.aktiv.letzte||[]).slice(-1)[0]||'')}</span></div>`:'')
+      vb.innerHTML=(d.automatik&&d.automatik.stand!=='fertig'?`<div class="zuord" style="margin-bottom:10px">${automatikZeile(d.automatik)}${d.automatik.stand==='gescheitert'?`<button class="btn ghost" style="margin-top:6px" onclick="job(['automatik','${esc(s.id)}','--frei'],'Wieder freigeben')">Wieder anlaufen lassen</button>`:''}</div>`:'')+(d.aktiv?`<div class="zuord" style="border-left-color:var(--green);background:#eefaf3;border-color:#bfe8cf"><b>Wird gerade bearbeitet</b> — seit ${d.aktiv.minuten??0} Min. <span class="meta" style="display:block;margin-top:4px">${esc((d.aktiv.letzte||[]).slice(-1)[0]||'')}</span></div>`:'')
         +(d.naechster?`<div class="zuord" style="margin-bottom:10px"><b>Als Nächstes:</b> ${esc(d.naechster.text)} <span class="pill">${esc(d.naechster.wer)}</span>${d.naechster.wer==='Claude'&&!d.claude_bereit?' <span style="color:var(--red)">— Claude-Zugang fehlt (Übersicht)</span>':''}</div>`:'')
         +(v.length?`<table>${v.map(e=>`<tr><td style="white-space:nowrap;color:var(--grey)">${esc(e.zeit)}</td><td><b>${esc(e.schritt)}</b>${e.detail?'<br><small class="hint">'+esc(e.detail)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="meta">Noch nichts passiert.</p>')}
     const rb=$('#rohbox');
