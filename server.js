@@ -302,9 +302,11 @@ const server = http.createServer(async (req, res) => {
           // Zufallsendung: zwei Lieferungen in derselben Minute mit gleichem ersten Dateinamen
           // landeten sonst im selben Ordner und ueberschrieben sich (gefunden 29.09.2026).
           + "-" + Math.random().toString(36).slice(2, 6);
-        const art = ["reel", "story", "heute"].includes(b.art) ? b.art : "reel";
+        // 11.10.2026: „karussell" fehlte hier — ein online hochgeladenes Karussell wurde zum Reel ohne Video,
+        // die Seite meldete trotzdem „angekommen".
+        const art = ["reel", "story", "heute", "karussell"].includes(b.art) ? b.art : "reel";
         const erwartet = (Array.isArray(b.erwartet) ? b.erwartet : []).map((e) => ({ name: sauber(e.name), art: e.art === "zusatz" ? "zusatz" : "video", bytes: Number(e.bytes) || 0 }));
-        writeJSON(path.join(UPLOADS, id, "paket.json"), { id, name: b.name, art, absender: b.absender || "", notizen: b.notizen || "", zusatz: b.zusatz || [], erwartet, eingang: new Date().toISOString(), status: "offen", quelle: "online" });
+        writeJSON(path.join(UPLOADS, id, "paket.json"), { id, name: b.name, art, karussell_art: ["fertig", "material", "anweisung"].includes(b.karussell_art) ? b.karussell_art : "", absender: b.absender || "", notizen: b.notizen || "", zusatz: b.zusatz || [], erwartet, eingang: new Date().toISOString(), status: "offen", quelle: "online" });
         return sendJSON(res, 200, { ok: true, id });
       }
       if (p === "/api/upload-paket/datei") {

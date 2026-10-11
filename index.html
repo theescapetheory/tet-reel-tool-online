@@ -1233,6 +1233,7 @@ async function load(){
   if(view==='reel')return;
   if(vorher===JSON.stringify(S))return;                 // nichts Neues -> stehen lassen
   if(document.querySelector('.modal'))return;           // ein Fenster ist offen
+  if(typeof UPL!=='undefined'&&UPL.laeuft)return;       // ein Upload laeuft — die Seite darf das Formular jetzt nicht neu bauen
   const a=document.activeElement;
   if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;   // es wird gerade getippt
   render();
@@ -1264,9 +1265,6 @@ async function uploadLink(){const d=await api('/api/upload-link');if(!d.link)ret
 async function uploadFrei(inp){const f=inp.files[0];if(!f)return;toast('Lade fertige Fassung hoch … ('+Math.round(f.size/1e6)+' MB)');
  const r=await fetch('/api/upload-frei?session='+encodeURIComponent(cur.session)+'&slug='+encodeURIComponent(cur.slug),{method:'POST',body:f});const d=await r.json();
  toast(d.ok?'✓ Fertige Fassung liegt in 3 · Freigegeben — bereit für den Contentplan.':'Fehler beim Upload');load()}
-async function upload(inp){const f=inp.files[0];if(!f)return;toast('Lade „'+f.name+'“ hoch … ('+Math.round(f.size/1e6)+' MB)');
- const r=await fetch('/api/upload?name='+encodeURIComponent(f.name),{method:'POST',body:f});const d=await r.json();
- toast(d.ok?'✓ Hochgeladen — liegt im Eingang als „'+d.id+'“':'Fehler beim Upload');load()}
 // `opts.url`/`opts.body`: manche Auftraege haben einen eigenen Endpunkt (z. B. Story-Anweisungen,
 // die erst den Ordner aufloesen muessen) — die Verfolgung des Auftrags ist danach dieselbe.
 async function job(args,label,opts){
@@ -1356,14 +1354,16 @@ function uplFormular(ziel, key){
         <button class="btn ghost" data-kar="material" onclick="uplKarArt('material')">Rohmaterial + Anweisungen</button>
         <button class="btn ghost" data-kar="anweisung" onclick="uplKarArt('anweisung')">Nur Anweisungen</button>
       </div>
+      <label class="meta" style="display:block;margin:4px 0"><b>Name des Karussells</b></label>
+      <input id="uplKarName" type="text" style="width:100%;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px">
       <div class="row" id="uplKarDateien" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer"><span id="uplKarLabel">Slides wählen</span><input id="uplKarInput" type="file" accept="image/*" multiple hidden onchange="uplSetZusatz(this)"></label><span id="uplKarHint" class="meta">in der richtigen Reihenfolge</span></div>
     </div>
-    <div class="row" style="gap:10px;align-items:center;margin-top:8px"><input id="uplIcloud" type="text" placeholder="iCloud-Link" style="flex:1;min-width:200px;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:10px"><button class="btn ghost" onclick="uplIcloudHolen()">Holen</button></div>
+    <div class="row" id="uplIcloudZeile" style="gap:10px;align-items:center;margin-top:8px"><input id="uplIcloud" type="text" placeholder="iCloud-Link" style="flex:1;min-width:200px;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:10px"><button class="btn ghost" onclick="uplIcloudHolen()">Holen</button></div>
     <div id="uplCutter">
       <label class="meta" style="display:block;margin-top:12px"><b>Zusatzmaterial</b></label>
       <div class="row" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Dateien wählen<input type="file" accept="image/*,.pdf" multiple hidden onchange="uplSetZusatz(this)"></label><span id="uplZ" class="meta">–</span></div>
       <label class="meta" style="display:block;margin-top:12px"><b id="uplNotizLabel">Notizen für den Cutter</b></label>
-      <textarea id="uplNotiz" style="width:100%;min-height:80px;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px" placeholder="z. B. Bild bei 0:03 einblenden"></textarea>
+      <textarea id="uplNotiz" oninput="UPL.notiz=this.value;uplKarPruefen()" style="width:100%;min-height:80px;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px" placeholder="z. B. Bild bei 0:03 einblenden"></textarea>
     </div>
     <label class="meta" style="display:block;margin-top:12px"><b>Absender</b></label>
     <input id="uplAbsender" type="text" placeholder="Dein Name" oninput="uplAbsenderMerken(this.value)" style="width:100%;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:10px">
@@ -1377,25 +1377,30 @@ function uplAbsender(){try{return localStorage.getItem('uplAbsender')||''}catch(
 function uplAbsenderMerken(v){try{localStorage.setItem('uplAbsender',v)}catch(e){}}
 function uplZustandZeigen(){
   const a=document.getElementById('uplAbsender'); if(a&&!a.value) a.value=uplAbsender();
+  const nz=document.getElementById('uplNotiz'); if(nz&&!nz.value&&UPL.notiz) nz.value=UPL.notiz;
+  const kn=document.getElementById('uplKarName'); if(kn&&!kn.value) kn.value=uplKarNameVorschlag();
+  const zz=document.getElementById('uplZ'); if(zz&&UPL.zusatz&&UPL.zusatz.length&&UPL.art!=='karussell') zz.textContent=UPL.zusatz.map(f=>f.name).join(', ');
+  const gg=document.getElementById('uplGo'); if(gg&&UPL.laeuft) gg.disabled=true;
   if(document.getElementById('uplArt')) uplArtWahl(UPL.art||'reel');
   const v=document.getElementById('uplV'); if(v&&UPL.videos&&UPL.videos.length){v.textContent=UPL.videos.length===1?UPL.video.name+' · '+Math.round(UPL.video.size/1e6)+' MB':UPL.videos.length+' Teile: '+UPL.videos.map(f=>f.name).join(' → '); const g=document.getElementById('uplGo'); if(g&&!UPL.laeuft) g.disabled=false}
   const m=document.getElementById('uplMeldung'); if(m){m.hidden=!UPL_MELDUNG; m.textContent=UPL_MELDUNG||''}
   const st=document.getElementById('uplStatus'); if(st&&UPL.laeuft&&UPL.stand) st.textContent=UPL.stand}
 let UPL_MELDUNG='';
 function uplGemeldet(t){UPL_MELDUNG=t+' · '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+' Uhr'; uplZustandZeigen()}
-let UPL={art:'reel',video:null,videos:[],zusatz:[]};
+let UPL={art:'reel',video:null,videos:[],zusatz:[],notiz:'',laeuft:false,stand:''};
 // iCloud-Link (Anne 16.09.: Alex teilt so): der Rechner holt die passende Fassung und meldet sie im Eingang an
 function uplIcloudHolen(){const i=document.getElementById('uplIcloud'),st=document.getElementById('uplStatus');const l=(i.value||'').trim();if(!l)return;
   const n=UPL.art==='reel'?((document.getElementById('uplNotiz')||{}).value||''):'';const args=['icloud',l,'--art',UPL.art];if(n)args.push('--notizen',n);
-  i.value='';if(st)st.textContent='Hole aus iCloud …';job(args,'iCloud-Link holen')}
+  i.value='';if(st)st.textContent='';job(args,'iCloud-Link holen')}
 function uplArtWahl(a){UPL.art=a;
   const vz=document.getElementById('uplVideoZeile'); if(vz) vz.hidden=(a==='karussell');
+  const iz=document.getElementById('uplIcloudZeile'); if(iz) iz.hidden=(a==='karussell');   // ein Karussell kommt nicht per iCloud-Link
   const kz=document.getElementById('uplKarussellZeile'); if(kz) kz.hidden=(a!=='karussell');
   const nl=document.getElementById('uplNotizLabel'); if(nl) nl.textContent=(a==='karussell'?'Notizen für Nico':'Notizen für den Cutter');
   const nt=document.getElementById('uplNotiz'); if(nt) nt.placeholder=(a==='karussell'?'Worum geht es, welche Aussage pro Seite, welcher CTA — die Caption schreibe ich am Ende':'z. B. Bild bei 0:03 einblenden');
   if(a==='karussell'&&!UPL.karArt) uplKarArt('fertig');
   uplKarPruefen();
-  const c=document.getElementById('uplCutter'); if(c){c.hidden=(a==='heute'); if(a==='heute'){UPL.zusatz=[];const z=document.getElementById('uplZ');if(z)z.textContent='–';const n=document.getElementById('uplNotiz');if(n)n.value=''}}
+  const c=document.getElementById('uplCutter'); if(c){c.hidden=(a==='heute'); if(a==='heute'){UPL.zusatz=[];UPL.notiz='';const z=document.getElementById('uplZ');if(z)z.textContent='–';const n=document.getElementById('uplNotiz');if(n)n.value=''}}
   document.querySelectorAll('#uplArt button').forEach(b=>{b.className='btn'+(b.dataset.art===a?'':' ghost');if(a==='heute'&&b.dataset.art==='heute'){b.style.background='var(--yellow)';b.style.color='var(--navy)'}else{b.style.background='';b.style.color=''}})}
 // Anne 24.09.2026: Bea hat drei zusammengehoerende Schnipsel als drei Lieferungen hochgeladen,
 // weil nur eine Datei ging — am Ende lagen sie als drei Storys da statt als ein Reel. Mehrere
@@ -1406,7 +1411,7 @@ function uplSetVideo(inp){UPL.videos=[...inp.files];UPL.video=UPL.videos[0]||nul
   if(!UPL.videos.length){v.textContent='–'}
   else if(UPL.videos.length===1){v.textContent=UPL.video.name+' · '+Math.round(UPL.video.size/1e6)+' MB'}
   else{const mb=Math.round(UPL.videos.reduce((a,f)=>a+f.size,0)/1e6);
-       v.textContent=UPL.videos.length+' Teile · '+mb+' MB — werden zu EINEM Beitrag zusammengefügt: '+UPL.videos.map(f=>f.name).join(' → ')}
+       v.textContent=UPL.videos.length+' Dateien · '+mb+' MB — '+(UPL.art==='reel'?'werden zu EINEM Reel zusammengefügt: ':'jede wird eine eigene Story: ')+UPL.videos.map(f=>f.name).join(' → ')}
   document.getElementById('uplGo').disabled=!UPL.videos.length}
 function uplSetZusatz(inp){UPL.zusatz=[...inp.files];const z=document.getElementById('uplZ');if(z)z.textContent=UPL.zusatz.length?UPL.zusatz.map(f=>f.name).join(', '):'–';
   if(UPL.art==='karussell'){uplKarPruefen();const st=document.getElementById('uplStatus');if(st)st.textContent=UPL.zusatz.length+(UPL.karArt==='fertig'?' Slides':' Dateien')}}
@@ -1421,63 +1426,83 @@ function uplKarArt(k){UPL.karArt=k;
   document.querySelectorAll('#uplKarArt button').forEach(b=>b.className='btn'+(b.dataset.kar===k?'':' ghost'));
   uplKarPruefen()}
 function uplKarPruefen(){const go=document.getElementById('uplGo'); if(!go)return;
+  if(UPL.laeuft){go.disabled=true;return}
   if(UPL.art!=='karussell'){go.disabled=!UPL.video;return}
   const notiz=((document.getElementById('uplNotiz')||{}).value||'').trim();
   go.disabled = UPL.karArt==='anweisung' ? !notiz : !(UPL.zusatz||[]).length;}
-function uplPut(url,file,onp){return new Promise((res,rej)=>{const x=new XMLHttpRequest();x.open('POST',url);x.upload.onprogress=e=>onp&&onp(e.loaded/e.total);x.onload=()=>x.status<300?res(JSON.parse(x.responseText)):rej(new Error(x.responseText||x.status));x.onerror=()=>rej(new Error('Netzwerkfehler'));x.send(file)})}
-async function uplSenden(key){
-  const st=document.getElementById('uplStatus'), go=document.getElementById('uplGo');
-  if(UPL.art==='karussell'){return uplKarussellSenden(key)}
-  if(!UPL.video)return; go.disabled=true; const q=key?'?key='+encodeURIComponent(key):'';
+// ---------- Hochladen (Kreis eingang, neu gefasst 11.10.2026) ----------
+// EIN Weg fuer Reel, Story, Story HEUTE und Karussell — derselbe Ablauf wie auf der Seite fuer Externe:
+// vorher pruefen (Groesse), der Server kennt die erwartete Lieferung (Namen und Bytes), jede Datei hat drei
+// Versuche, am Ende wird abgeglichen und Fehlendes einmal nachgeschickt. Vorher fehlte hier alles davon.
+const UPL_MAX=3*1024*1024*1024;
+function uplFehlerText(t){try{const d=JSON.parse(t);return d.error||t}catch(e){return String(t||'').slice(0,200)||'unbekannter Fehler'}}
+function uplPut(url,file,onp){return new Promise((res,rej)=>{const x=new XMLHttpRequest();x.open('POST',url);x.upload.onprogress=e=>onp&&e.total&&onp(e.loaded/e.total);
+  x.onload=()=>{if(x.status<300){try{res(JSON.parse(x.responseText))}catch(e){res({ok:true})}}else rej(new Error(uplFehlerText(x.responseText)||('Fehler '+x.status)))};
+  x.onerror=()=>rej(new Error('Verbindung abgebrochen'));x.send(file)})}
+async function uplPutSicher(url,file,onp){let letzter;
+  for(let v=1;v<=3;v++){try{return await uplPut(url,file,onp)}catch(e){letzter=e;if(/zu gro/i.test(e.message))break;if(v<3){uplStand('Verbindung unterbrochen — Versuch '+(v+1)+' von 3 …');await new Promise(ok=>setTimeout(ok,v*4000))}}}
+  throw letzter}
+function uplStand(t){UPL.stand=t;const st=document.getElementById('uplStatus');if(st)st.textContent=t}
+function uplEnde(){UPL.laeuft=false;UPL.stand='';const go=document.getElementById('uplGo');if(go)go.disabled=false;uplKarPruefen()}
+async function uplLiefern(key,kopf,dateien){
+  // dateien: [{file, art:'video'|'zusatz', name}] — `name` ist der Name, unter dem die Datei ankommen soll
+  if(UPL.laeuft)return false;
+  if(window.HOSTED){const gross=dateien.filter(d=>d.file.size>UPL_MAX);
+    if(gross.length){toast('Zu groß für den Upload (über 3 GB): '+gross.map(d=>d.file.name).join(', ')+'. Bitte als iCloud-Link schicken (Feld „iCloud-Link“).',12000);return false}}
+  UPL.laeuft=true;const go=document.getElementById('uplGo');if(go)go.disabled=true;
+  const q=key?'?key='+encodeURIComponent(key):'', und=q?q+'&':'?';
   try{
-    st.textContent='Paket anlegen …';
-    const meta=await fetch('/api/upload-paket'+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:UPL.video.name,art:UPL.art,notizen:UPL.art!=='heute'?(document.getElementById('uplNotiz')||{}).value||'':'',zusatz:UPL.art!=='heute'?UPL.zusatz.map(f=>f.name):[],absender:(document.getElementById('uplAbsender')||{}).value||uplAbsender()})}).then(r=>r.json());
-    if(!meta.ok)throw new Error(meta.error||'Paket');
-    const total=UPL.videos.reduce((a,f)=>a+f.size,0)+UPL.zusatz.reduce((a,f)=>a+f.size,0); let done=0;
-    for(let i=0;i<UPL.videos.length;i++){const f=UPL.videos[i];
-      // Nummer voran, damit die Reihenfolge auch auf der Gegenseite stimmt
-      const n=UPL.videos.length>1?String(i+1).padStart(2,'0')+'-'+f.name:f.name;
-      await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=video&name=${encodeURIComponent(n)}`,f,p=>st.textContent=(UPL.videos.length>1?`Teil ${i+1}/${UPL.videos.length} `:'Video ')+Math.round((done+p*f.size)/total*100)+' %');
-      done+=f.size}
-    for(const f of (UPL.art!=='heute'?UPL.zusatz:[])){await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=zusatz&name=${encodeURIComponent(f.name)}`,f,p=>st.textContent='Zusatz '+Math.round((done+p*f.size)/total*100)+' %');done+=f.size}
-    const fin=await fetch(`/api/upload-paket/fertig${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}`,{method:'POST'}).then(r=>r.json());
-    if(fin&&(fin.error||(fin.fehlt&&fin.fehlt.length)))throw new Error(fin.error||('nicht alles angekommen — fehlt: '+fin.fehlt.map(x=>x.name).join(', ')+'. Bitte noch einmal hochladen.'));
-    st.textContent='✓ Hochgeladen';
-    {const wie={reel:'Reel-Material',story:'Story-Material',heute:'Story HEUTE'}[UPL.art]||UPL.art; uplGemeldet('✓ Angekommen: '+UPL.videos.map(f=>f.name).join(', ')+' ('+wie+')')}
-    UPL={art:UPL.art,video:null,videos:[],zusatz:[]}; document.getElementById('uplV').textContent='–'; document.getElementById('uplZ').textContent='–'; document.getElementById('uplNotiz').value='';
-    if(typeof load==='function') load();
-  }catch(e){st.textContent='Fehler: '+e.message; go.disabled=false}
+    uplStand('Lieferung anmelden …');
+    const meta=await post('/api/upload-paket'+q,{...kopf,zusatz:dateien.filter(d=>d.art==='zusatz').map(d=>d.name),
+      erwartet:dateien.map(d=>({name:d.name,art:d.art,bytes:d.file.size}))});
+    if(!meta||!meta.ok)throw new Error((meta&&meta.error)||'Die Lieferung ließ sich nicht anmelden.');
+    const total=dateien.reduce((a,d)=>a+d.file.size,0)||1;let done=0;
+    const schicken=async(d,i,n)=>{await uplPutSicher(`/api/upload-paket/datei${und}paket=${encodeURIComponent(meta.id)}&art=${d.art}&name=${encodeURIComponent(d.name)}`,d.file,
+      p=>uplStand((n>1?`Datei ${i+1} von ${n} · `:'')+Math.round((done+p*d.file.size)/total*100)+' %'));done+=d.file.size};
+    for(let i=0;i<dateien.length;i++) await schicken(dateien[i],i,dateien.length);
+    uplStand('Prüfe, ob alles angekommen ist …');
+    let fin=await post(`/api/upload-paket/fertig${und}paket=${encodeURIComponent(meta.id)}`,{});
+    if(fin&&fin.fehlt&&fin.fehlt.length){                     // einmal nachschicken, dann erneut abgleichen
+      const fehlt=dateien.filter(d=>fin.fehlt.some(x=>x.name===d.name||String(x.name).endsWith(d.name)));
+      for(let i=0;i<fehlt.length;i++){done=0;await schicken(fehlt[i],i,fehlt.length)}
+      fin=await post(`/api/upload-paket/fertig${und}paket=${encodeURIComponent(meta.id)}`,{});
+    }
+    if(!fin||fin.error||(fin.fehlt&&fin.fehlt.length))throw new Error((fin&&fin.fehlt&&fin.fehlt.length)?('Nicht alles ist angekommen — es fehlt: '+fin.fehlt.map(x=>x.name).join(', ')+'. Bitte noch einmal hochladen.'):((fin&&fin.error)||'Der Abschluss hat nicht geantwortet.'));
+    uplEnde();uplStand('✓ Hochgeladen');
+    return fin;
+  }catch(e){uplEnde();uplStand('Nicht hochgeladen: '+e.message);toast('Nicht hochgeladen: '+e.message,12000);return false}
 }
-
+async function uplSenden(key){
+  if(UPL.art==='karussell')return uplKarussellSenden(key);
+  if(!UPL.videos.length)return;
+  const heute=UPL.art==='heute', viele=UPL.videos.length>1;
+  // Nummer voran, damit die Reihenfolge auch auf der Gegenseite stimmt
+  const dateien=UPL.videos.map((f,i)=>({file:f,art:'video',name:viele?String(i+1).padStart(2,'0')+'-'+f.name:f.name}))
+    .concat(heute?[]:UPL.zusatz.map(f=>({file:f,art:'zusatz',name:f.name})));
+  const namen=UPL.videos.map(f=>f.name).join(', ');
+  const fin=await uplLiefern(key,{name:UPL.videos[0].name,art:UPL.art,notizen:heute?'':(UPL.notiz||''),absender:uplAbsenderJetzt()},dateien);
+  if(!fin)return;
+  const wo={reel:window.HOSTED?'Der Rechner im Studio holt es jetzt ab und beginnt mit der Verarbeitung.':'Liegt im Eingang und wird verarbeitet.',
+            story:'Liegt in der Story-Planung.',heute:'Bekommt jetzt Untertitel und wird für heute eingeplant.'}[UPL.art]||'';
+  uplGemeldet('✓ Angekommen: '+namen+'. '+wo);
+  UPL={art:UPL.art,video:null,videos:[],zusatz:[],notiz:'',karArt:UPL.karArt};uplFormularLeeren();load();
+}
 async function uplKarussellSenden(key){
-  const st=document.getElementById('uplStatus'), go=document.getElementById('uplGo');
-  const notiz=((document.getElementById('uplNotiz')||{}).value||'').trim();
+  const notiz=(UPL.notiz||'').trim(), name=((document.getElementById('uplKarName')||{}).value||'').trim();
+  if(!name)return toast('Bitte dem Karussell einen Namen geben');
   if(UPL.karArt!=='anweisung'&&!UPL.zusatz.length)return toast('Bitte Dateien wählen');
   if(UPL.karArt==='anweisung'&&!notiz)return toast('Bitte Anweisungen eintragen');
-  go.disabled=true; const q=key?'?key='+encodeURIComponent(key):'';
-  try{
-    const titel=prompt('Name des Karussells','karussell-'+new Date().toISOString().slice(0,10))||('karussell-'+Date.now());
-    const meta=await fetch('/api/upload-paket'+q,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name:titel,art:'karussell',karussell_art:UPL.karArt||'fertig',notizen:notiz,zusatz:UPL.zusatz.map(f=>f.name),absender:(document.getElementById('uplAbsender')||{}).value||uplAbsender()})}).then(r=>r.json());
-    if(!meta.ok)throw new Error(meta.error||'Paket');
-    let i=0; for(const f of UPL.zusatz){i++; st.textContent='Slide '+i+' von '+UPL.zusatz.length;
-      await uplPut(`/api/upload-paket/datei${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}&art=zusatz&name=${encodeURIComponent(String(i).padStart(2,'0')+'-'+f.name)}`,f)}
-    const fin=await fetch(`/api/upload-paket/fertig${q?q+'&':'?'}paket=${encodeURIComponent(meta.id)}`,{method:'POST'}).then(r=>r.json());
-    st.textContent='✓ '+(fin.slides||UPL.zusatz.length)+' Slides übernommen'; uplGemeldet('✓ Angekommen: Karussell „'+titel+'" mit '+(fin.slides||UPL.zusatz.length)+' Dateien');
-    UPL.zusatz=[]; toast('Karussell liegt zur Prüfung'); if(typeof load==='function') load();
-  }catch(e){st.textContent='Fehler: '+e.message; go.disabled=false}
+  const dateien=UPL.zusatz.map((f,i)=>({file:f,art:'zusatz',name:String(i+1).padStart(2,'0')+'-'+f.name}));
+  const fin=await uplLiefern(key,{name,art:'karussell',karussell_art:UPL.karArt||'fertig',notizen:notiz,absender:uplAbsenderJetzt()},dateien);
+  if(!fin)return;
+  uplGemeldet('✓ Angekommen: Karussell „'+name+'“'+(dateien.length?' mit '+dateien.length+' Datei(en)':'')+'. '+(window.HOSTED?'Der Rechner im Studio holt es jetzt ab; danach steht es unter Karussells · Rohmaterial.':'Es steht unter Karussells · Rohmaterial.'));
+  UPL={art:'karussell',video:null,videos:[],zusatz:[],notiz:'',karArt:UPL.karArt};uplFormularLeeren();load();
 }
-async function uploadArt(inp,artFest){
-  const f=inp.files[0]; if(!f) return;
-  const art=artFest||(document.querySelector('input[name="uplart"]:checked')||{}).value||'reel';
-  toast('Lade „'+f.name+'“ hoch … ('+Math.round(f.size/1e6)+' MB)');
-  const r=await fetch('/api/upload?art='+art+'&name='+encodeURIComponent(f.name),{method:'POST',body:f});
-  const d=await r.json(); inp.value='';
-  toast(d.ok?(art==='heute'?'✓ Story für heute — Untertitel werden gerade eingebrannt, das dauert etwa so lange wie der Clip.'
-    :art==='story'?'✓ Story-Material liegt im Rohmaterial (Redaktionsplan).'
-    :'✓ Reel-Material liegt im Eingang als „'+d.id+'“'):'Fehler beim Upload', 9000);
-  render();
-}
+function uplAbsenderJetzt(){return ((document.getElementById('uplAbsender')||{}).value||uplAbsender()||'').trim()}
+function uplFormularLeeren(){for(const [id,t] of [['uplV','–'],['uplZ','–']]){const e=document.getElementById(id);if(e)e.textContent=t}
+  for(const id of ['uplNotiz','uplKarName']){const e=document.getElementById(id);if(e)e.value=id==='uplKarName'?uplKarNameVorschlag():''}
+  uplKarPruefen()}
+function uplKarNameVorschlag(){return 'karussell-'+fmt(new Date())}
 async function storyFreigeben(name){
   const d=await post('/api/story/freigeben',{name});
   toast(d.ok?'✓ Stories freigegeben — die Routine plant sie ein.':(d.error||'Fehler'));
@@ -1601,9 +1626,10 @@ function vEingang(){
   const neu=S.sessions.filter(s=>s.status==='neu').length, inArbeit=S.sessions.filter(s=>!['neu','gepostet','kpi'].includes(s.status)).length;
   const reels=S.sessions.flatMap(s=>s.reels.map(r=>({...r,session:s.id})));
   const bereit=reels.filter(r=>['bereit','freigegeben','viral-ok'].includes(r.status)).length;
-  return `<h1>Eingang</h1>
-  <div class="sub">${neu} neu · ${inArbeit} in Arbeit · ${bereit} Reels bereit/freigabefähig · CTA zuletzt: <b>${esc(S.cta||'–')}</b> · Metricool: Connector-Routine${S.metricool==='token'?' + REST-Token':''} · Watch zuletzt ${esc(S.intakeZuletzt||'–')}
-  &nbsp; <button class="btn ghost" onclick="job(['watch'],'Dropbox prüfen')">Dropbox jetzt prüfen</button> <label class="btn" style="cursor:pointer">⬆︎ Rohmaterial hochladen<input type=file accept=video/*,audio/* style=display:none onchange=upload(this)></label> <button class="btn ghost" onclick="uploadLink()">🔗 Link für Externe (nur Hochladen)</button></div>
+  return `<h1>Reels · Rohmaterial</h1>
+  <div class="sub">${neu} neu · ${inArbeit} in Arbeit · ${bereit} Vorschnitte bereit</div>
+  <div class="row" style="margin:10px 0 16px"><button class="btn" onclick="nav('upload')">⬆︎ Material hochladen</button>
+    <button class="btn ghost" onclick="job(['watch'],'Dropbox prüfen')" title="Sieht sofort in den Dropbox-Ordnern nach neuem Material (sonst alle 5 Minuten von selbst)">Dropbox jetzt prüfen</button></div>
   <div class="grid">${S.sessions.map(s=>`<div class="card" onclick="nav('session',{session:'${esc(s.id)}'})" title="Projekt öffnen (Verarbeitung, Kandidaten)">
     <div class="row" style="justify-content:space-between"><span class="pill ${esc(s.status)}">${esc(LABEL[s.status]||s.status)}</span>${S.aktiv&&S.aktiv.session===s.id?'<span class="pill ok">läuft gerade</span>':''}<span class="meta">${esc(s.typ||'')} · ${esc(s.material||'')}</span></div>
     <h3 style="margin-top:10px">${esc(s.id)}</h3>
