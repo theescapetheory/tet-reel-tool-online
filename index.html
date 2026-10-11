@@ -1076,6 +1076,7 @@ tr:last-child td{ border-bottom:0; }
 </div>
 <div id="toast" class="toast" hidden></div>
 <script>
+// ===== Grundlage: Sprechen mit dem Rechner, Rueckmeldung, Navigation, Uebersicht =====
 const $=(s,r=document)=>r.querySelector(s);
 // Datum als JJJJ-MM-TT — wird im Contentplan UND im Einplanen-Fenster gebraucht, muss global sein
 // Ortszeit, nicht Weltzeit: zwischen 0 und 2 Uhr nachts ergab toISOString() den Vortag (11.10.2026).
@@ -1182,18 +1183,6 @@ function mitLinks(t){
   return esc(String(t||'')).replace(/(https?:\/\/[^\s<]+)/g,
     '<a class="netz" href="$1" target="_blank" rel="noopener">$1</a>');
 }
-// Vorschnitt ans Schnittstudio geben (Ue-EIN). Die Automatik legt das Paket nach jedem Bau von selbst ab;
-// der Knopf baut es neu, z. B. nach einer Aenderung am Vorschnitt. CapCut ist seit 10.10.2026 raus.
-function schnittstudioPaket(pfad){ job(['schnittstudio-paket', pfad], 'Paket fürs Schnittstudio bauen'); }
-// Material, das nicht auf Instagram gehoert (z. B. ein Clip fuer den Circle), aus der Auswahl nehmen.
-// Die Datei bleibt liegen — nur die Anzeige verschwindet, damit nichts unwiederbringlich weg ist.
-async function matAussortieren(id, titel){
-  if(!confirm('„'+titel+'" aus der Auswahl nehmen?\n\nDie Datei bleibt erhalten, sie wird nur nicht mehr zum Einplanen angeboten.'))return;
-  const m=document.getElementById('matModal'); if(m)m.remove();
-  const r=await post('/api/material-aussortieren',{id});
-  if(r&&r.ok){ MATERIAL=(MATERIAL||[]).filter(x=>x.id!==id); toast('Aus der Auswahl genommen'); if(view==='plan')render(); }
-  else toast('Fehler: '+((r&&r.error)||'unbekannt'));
-}
 async function auftragOeffnen(id){
   let a=await api('/api/auftrag/'+encodeURIComponent(id));
   // Ein Auftrag, den der Mac noch nicht kennt (online ausgeloest) oder den es nicht mehr gibt,
@@ -1259,15 +1248,6 @@ function nav(v,extra){view=v;Object.assign(cur,extra||{});
   const cl=document.getElementById('ctxLabel'); if(cl) cl.textContent=NAV_TITEL[v]||'';
   document.querySelector('.app').classList.remove('nav-open');
   render()}
-document.querySelectorAll('nav button[data-v]').forEach(b=>b.onclick=()=>nav(b.dataset.v));
-try{const st=JSON.parse(localStorage.getItem('navZu')||'{}');Object.entries(st).forEach(([g,zu])=>{if(zu)navGruppe(g,false)})}catch{}
-async function sessionEntfernen(id){if(!confirm('Diesen Upload aus dem Eingang entfernen? (Datei wird verschoben, nicht gelöscht)'))return;if(await tun('/api/session-entfernen',{id},'Aus dem Eingang entfernt')){await load();nav('eingang')}}
-async function uploadLink(){const d=await api('/api/upload-link');if(!d.link)return toast('Kein Upload-Schlüssel gesetzt');try{await navigator.clipboard.writeText(d.link)}catch{}toast('Upload-Link kopiert: '+d.link,12000)}
-async function uploadFrei(inp){const f=inp.files[0];if(!f)return;
-  if(!confirm('„'+f.name+'“ ('+Math.round(f.size/1e6)+' MB) als fertige Fassung dieses Reels hochladen?\n\nSie steht danach unter Freigegeben im Contentplan.'))return;
-  const fin=await uplLiefern('',{name:cur.slug+'.mp4',art:'frei',frei_session:cur.session,frei_slug:cur.slug,absender:uplAbsender()},[{file:f,art:'video',name:cur.slug+'.mp4'}]);
-  if(!fin)return;
-  toast(window.HOSTED?'✓ Hochgeladen. Der Rechner im Studio legt die Fassung jetzt unter Freigegeben ab (etwa eine Minute).':'✓ Die fertige Fassung liegt unter Freigegeben — bereit für den Contentplan.',9000);load()}
 // `opts.url`/`opts.body`: manche Auftraege haben einen eigenen Endpunkt (z. B. Story-Anweisungen,
 // die erst den Ordner aufloesen muessen) — die Verfolgung des Auftrags ist danach dieselbe.
 async function job(args,label,opts){
@@ -1357,6 +1337,135 @@ async function claudeZugang(){const el=document.getElementById('claudeZugang'); 
   api('/api/speicher').then(b=>{const e=document.getElementById('spInfo');if(!e||!b||b.error)return;
     e.textContent=`${(b.gesamt/1e9).toFixed(1)} GB belegt · ${(b.frei/1e9).toFixed(0)} GB frei · größte: ${(b.posten||[]).slice(0,2).map(x=>x.name.slice(0,26)+' '+Math.round(x.bytes/1e6)+' MB').join(' · ')}`})}
 async function claudeZugangSpeichern(loeschen){const k=loeschen?'':document.getElementById('apiKey').value.trim(); const r=await post('/api/claude-zugang',{api_key:k}); toast(r.error||(r.key?'✓ Claude läuft über den API-Key':'✓ Key entfernt')); claudeZugang()}
+function zeitseit(ms){ if(!ms) return ''; const t=Math.round((Date.now()-ms)/86400000);
+  return t<=0?'heute':t===1?'gestern':'vor '+t+' Tagen'; }
+
+function vUeber(m){
+  // Geruest sofort zeigen, statt die Seite leer zu lassen, bis die Daten da sind (Anne 17.09.)
+  m.innerHTML=`<h1>Übersicht</h1>
+    <div class="sec"><h2>Wo liegt was</h2>
+      <div class="kpi-grid">${[1,2,3,4].map(()=>'<div class="kpi"><span>lädt …</span><b>–</b></div>').join('')}</div></div>
+    <div class="sec"><h2>Als Nächstes</h2><div class="card"><p class="meta" style="margin:0">lädt …</p></div></div>`;
+  api('/api/uebersicht').then(d=>{
+    const r=d.reels, sr=d.storyRoh;
+    const arc=d.stories.heute||d.stories.ersatz, istHeute=!!d.stories.heute;
+    const reelZeilen=r.liste.map(s=>`<tr onclick="nav('session',{session:'${esc(s.id)}'})" style="cursor:pointer">
+      <td><b>${esc(s.id)}</b><br><small class="hint">${esc(s.typ||'')}${s.dateien?' · '+s.dateien+' Dateien':''}${s.reels?' · '+s.reels+' Reels':''}</small></td>
+      <td>${esc(s.datum||'')}</td>
+      <td><span class="pill ${esc(s.status)}">${esc(LABEL[s.status]||s.status)}</span></td>
+      <td style="width:170px">${ladder(s.status)}</td></tr>`).join('');
+    const storyZeilen=sr.liste.map(s=>`<tr onclick="nav('storyroh',{name:'${esc(s.name).replace(/'/g,"\\'")}'})" style="cursor:pointer"><td><b>${esc(s.name)}</b><br><small class="hint">${esc(s.quelle)}${s.einzeldatei?' · Einzeldatei':' · '+s.dateien+' Dateien'}</small></td>
+      <td>${esc(zeitseit(s.mtime))}</td></tr>`).join('');
+    const kacheln=arc?arc.bilder.map(b=>`<figure style="margin:0">
+      <a href="${b.url}" target="_blank"><img onerror="bildFehlt(this)" src="${b.url}" style="width:100%;border-radius:12px;border:1px solid var(--line);display:block"></a>
+      <figcaption class="meta" style="margin-top:6px">${esc(b.slot)}</figcaption></figure>`).join(''):'';
+
+    const hu=(d.heuteUploads&&d.heuteUploads.stories)||[];
+    const heuteKarten=hu.map(st=>`<div class="card" style="padding:12px">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <b style="font-size:14px">${esc(st.name)}</b>
+        <span class="pill ${st.status==='bereit'?'ok':st.status==='fehler'?'fehler':''}">${esc(st.status)}</span></div>
+      <div class="meta" style="margin:4px 0 8px">${st.untertitel?('Untertitel: '+st.woerter+' Wörter'):(st.hinweis?esc(st.hinweis):'ohne Untertitel')} · hochgeladen ${esc((st.erstellt||'').slice(11))}</div>
+      ${st.url?`<video controls preload="metadata" style="width:100%;border-radius:10px" src="${st.url}"></video>`:''}
+      ${st.grund?`<p class="sub" style="color:var(--red)">${esc(st.grund)}</p>`:''}
+    </div>`).join('');
+
+    const st=d.stand||{};
+    const stufe=(zahl,text,ziel)=>`<div class="kpi" style="cursor:pointer" onclick="nav('${ziel}')"><span>${text}</span><b>${zahl}</b></div>`;
+    m.innerHTML=`<h1>Übersicht</h1>
+
+    ${st.bremse?`<div class="card" style="border-left:3px solid var(--yellow);margin-bottom:18px">
+      <b style="font-size:14px">Verarbeitung pausiert: ${esc(st.bremse.grund)}</b>
+      <div class="meta" style="font-size:12px;margin-top:4px">seit ${esc(String(st.bremse.zeit||'').replace('T',' '))} · schützt vor unbemerkten API-Kosten. Höher setzen? Sag Bescheid.</div></div>`:''}
+    ${st.laeuft?`<div class="card" style="border-color:var(--camel);margin-bottom:18px">
+      <b style="font-size:14px">Läuft gerade: ${esc(st.laeuft.session)}</b>
+      <div class="meta" style="font-size:12px;margin-top:4px">seit ${st.laeuft.minuten} Min · ${esc((st.laeuft.letzte||[]).slice(-1)[0]||'')}</div></div>`:''}
+
+    <div class="sec"><h2>Wo liegt was</h2>
+      <div class="kpi-grid">
+        ${stufe(st.reels?.roh??0,'Reels · Rohmaterial','eingang')}
+        ${stufe(st.reels?.vorschnitt??0,'Reels · im Vorschnitt','vorschnitt')}
+        ${stufe((st.karussells?.eingang??0)+(st.karussells?.pruefung??0),'Karussells · offen','karFrei')}
+        ${stufe(st.storys?.pruefung??0,'Storys · zur Freigabe','storyFrei')}
+      </div>
+      <div class="kpi-grid" style="margin-top:12px">
+        ${stufe(st.reels?.freigegeben??0,'Reels freigegeben','plan')}
+        ${stufe(st.karussells?.frei??0,'Karussells freigegeben','karFrei')}
+        ${stufe(st.storys?.frei??0,'Storys freigegeben','storyFrei')}
+        ${stufe(st.storys?.nacharbeit??0,'bei Nico in Nacharbeit','storyFrei')}
+      </div>
+    </div>
+
+    <div class="sec"><h2>Als Nächstes</h2><div class="card">
+      ${(st.geplant||[]).length?`<table><tr><th>Wann</th><th>Beitrag</th><th>Stand</th></tr>${st.geplant.map(g=>`
+        <tr onclick="nav('plan')" style="cursor:pointer"><td>${esc(g.datum)} ${esc(g.uhrzeit)}</td>
+        <td>${esc(String(g.titel).slice(0,60))}</td><td><span class="pill">${esc(g.status)}</span></td></tr>`).join('')}</table>`
+        :'<p class="meta" style="margin:0">Nichts eingeplant — im Contentplan einen Termin setzen.</p>'}
+      <div class="row" style="margin-top:12px"><button class="btn ghost" onclick="nav('plan')">Zum Contentplan →</button>
+      <button class="btn ghost" onclick="nav('upload')">Material hochladen →</button></div>
+    </div></div>
+
+    ${(st.protokoll||[]).length?`<div class="sec"><h2>Zuletzt erledigt</h2><div class="card">
+      ${st.protokoll.map(a=>`<div class="aufz" onclick="auftragOeffnen('${esc(a.id)}')">
+        <span class="dot ${a.status==='läuft'?'laeuft':a.status==='fehler'?'fehler':'fertig'}"></span>
+        <div style="min-width:0;flex:1"><b>${esc(a.was||a.cmd)}</b>
+        <span class="meta" style="font-size:11px">${zeit(a.start)}${a.ende?' · '+dauer(a.start,a.ende):''}</span>
+        ${a.ergebnis?`<div class="erg">${esc(String(a.ergebnis).slice(0,160))}</div>`:''}</div></div>`).join('')}
+    </div></div>`:''}
+
+
+    <div class="sec"><h2>Storys</h2><div class="card">
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <button class="btn ghost" onclick="nav('storyFrei')">Zur Freigabe →</button>
+        <button class="btn ghost" onclick="nav('storyRoh')">Rohmaterial →</button>
+        <button class="btn ghost" onclick="nav('upload')">Story hochladen →</button>
+      </div></div></div>`;
+  });
+}
+
+function vFrei(m){
+  m.innerHTML='<h1>Freigegebener Content</h1><div class="grid" id="freigrid">lädt …</div>';
+  api('/api/frei').then(d=>{const g=$('#freigrid');if(!g)return;g.innerHTML=(d.reels||[]).map(r=>`<div class="card"><span class="pill freigegeben">freigegeben</span><h3 style="margin-top:8px">${esc(r.titel)}</h3><div class="meta">CTA ${esc(r.cta||'–')}</div><p style="font-size:13px;color:var(--grey);margin:8px 0">${esc(r.caption)}…</p><video controls preload="metadata" style="max-width:100%" src="/ready/${encodeURIComponent(r.slug)}/reel.mp4"></video><div class="row" style="margin-top:10px"><button class="btn" onclick="nav('plan')">In den Contentplan →</button></div></div>`).join('')||''});
+}
+// Online liegen nur die kleinen Web-Fassungen; die Originale gibt es ausschliesslich auf Annes Mac.
+// Zeigte das Tool trotzdem auf den Mac-Pfad, kam ein schwarzer Kasten ohne Erklaerung
+// (Anne 18.09.: „wo liegt gerade wieder das Problem, dass ich keine Videos sehen kann?").
+// Jetzt: entweder ein Video, das wirklich da ist — oder ein Satz, der sagt, woran es liegt.
+// Fehlt ein Bild (online meist: noch nicht hochgeladen), zeigt der Browser ein kaputtes Symbol.
+// Das sagt niemandem etwas — deshalb an seiner Stelle ein grauer Platz mit einem Satz.
+function bildFehlt(el){
+  // Erst noch ein paar Mal versuchen: Eine eben gebaute oder eben hochgeladene Vorschau ist oft Sekunden spaeter da
+  // (online holt der Dienst sie beim ersten Zugriff vom Rechner). Vorher blieb der Platzhalter fuer immer stehen.
+  const n=+(el.dataset.versuch||0);
+  if(n<6&&el.isConnected){el.dataset.versuch=n+1; const u=(el.getAttribute('src')||'').replace(/[?&]neu=\d+$/,'');
+    setTimeout(()=>{if(el.isConnected)el.src=u+(u.includes('?')?'&':'?')+'neu='+Date.now()},n?5000:2500); return}
+  if(el.dataset.weg) return; el.dataset.weg='1';
+  const d=document.createElement('div');
+  d.className='meta';
+  d.style.cssText='display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;background:var(--tint);border-radius:8px;padding:14px;min-height:60px';
+  d.textContent = window.HOSTED ? 'Bild wird noch übertragen' : 'Bild nicht gefunden';
+  el.replaceWith(d);
+}
+// Anne 17.09.: „kann man das in den Hintergrund verlagern, ohne dass ich es so sehr spüre?"
+// -> Im verborgenen Tab gar nicht abfragen; passiert lange nichts, wird der Takt gestreckt
+//    (20 s -> bis 2 Min.); sobald sich etwas regt oder du zurueckkommst, wieder eng.
+let takt=20000, stiller=0;
+function taktLauf(){
+  if(document.hidden){setTimeout(taktLauf,takt);return}
+  const vorher=S?JSON.stringify(S):null;
+  load().then(()=>{
+    const jetzt=S?JSON.stringify(S):null;
+    if(vorher===jetzt){stiller++; if(stiller>=3)takt=Math.min(120000,takt+20000)}
+    else {stiller=0; takt=20000}
+  }).catch(()=>{}).finally(()=>setTimeout(taktLauf,takt));
+}
+// ===== Upload =====
+async function uploadLink(){const d=await api('/api/upload-link');if(!d.link)return toast('Kein Upload-Schlüssel gesetzt');try{await navigator.clipboard.writeText(d.link)}catch{}toast('Upload-Link kopiert: '+d.link,12000)}
+async function uploadFrei(inp){const f=inp.files[0];if(!f)return;
+  if(!confirm('„'+f.name+'“ ('+Math.round(f.size/1e6)+' MB) als fertige Fassung dieses Reels hochladen?\n\nSie steht danach unter Freigegeben im Contentplan.'))return;
+  const fin=await uplLiefern('',{name:cur.slug+'.mp4',art:'frei',frei_session:cur.session,frei_slug:cur.slug,absender:uplAbsender()},[{file:f,art:'video',name:cur.slug+'.mp4'}]);
+  if(!fin)return;
+  toast(window.HOSTED?'✓ Hochgeladen. Der Rechner im Studio legt die Fassung jetzt unter Freigegeben ab (etwa eine Minute).':'✓ Die fertige Fassung liegt unter Freigegeben — bereit für den Contentplan.',9000);load()}
 // --- Upload-Paket (Anne 15.09.): Art + Video + Zusatzmaterial + Notizen — dasselbe Formular wie auf der externen Seite
 function uplFormular(ziel, key){
   const el=document.getElementById(ziel); if(!el) return;
@@ -1524,101 +1633,25 @@ function uplFormularLeeren(){for(const [id,t] of [['uplV','–'],['uplZ','–']]
   for(const id of ['uplNotiz','uplKarName']){const e=document.getElementById(id);if(e)e.value=id==='uplKarName'?uplKarNameVorschlag():''}
   uplKarPruefen()}
 function uplKarNameVorschlag(){return 'karussell-'+fmt(new Date())}
-async function storyFreigeben(name){
-  const d=await post('/api/story/freigeben',{name});
-  toast(d.ok?'✓ Stories freigegeben — die Routine plant sie ein.':(d.error||'Fehler'));
-  render();
+// Eigene Upload-Seite (Anne 17.09.): alle Upload-Wege an einem Ort, samt Link fuer Externe
+function vUpload(m){
+  m.innerHTML=`<h1>Upload</h1>
+    <div class="sec"><h2>Material hochladen</h2><div class="card"><div id="uplBox"></div></div></div>
+    <div class="sec"><h2>Link für Externe</h2><div class="card">
+      <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn" onclick="uploadLink()">Link kopieren</button>
+        <span class="meta" id="uplLinkText">ohne Login, nur mit Schlüssel — für Team und Externe</span>
+      </div></div></div>
+    <div class="sec"><h2>Claude-Zugang</h2><div class="card"><div id="claudeZugang"></div></div></div>`;
+  uplFormular('uplBox',''); claudeZugang();
+  api('/api/upload-link').then(d=>{const e=document.getElementById('uplLinkText');if(e&&d.link)e.textContent=d.link});
+  return '';
 }
-function zeitseit(ms){ if(!ms) return ''; const t=Math.round((Date.now()-ms)/86400000);
-  return t<=0?'heute':t===1?'gestern':'vor '+t+' Tagen'; }
-
-function vUeber(m){
-  // Geruest sofort zeigen, statt die Seite leer zu lassen, bis die Daten da sind (Anne 17.09.)
-  m.innerHTML=`<h1>Übersicht</h1>
-    <div class="sec"><h2>Wo liegt was</h2>
-      <div class="kpi-grid">${[1,2,3,4].map(()=>'<div class="kpi"><span>lädt …</span><b>–</b></div>').join('')}</div></div>
-    <div class="sec"><h2>Als Nächstes</h2><div class="card"><p class="meta" style="margin:0">lädt …</p></div></div>`;
-  api('/api/uebersicht').then(d=>{
-    const r=d.reels, sr=d.storyRoh;
-    const arc=d.stories.heute||d.stories.ersatz, istHeute=!!d.stories.heute;
-    const reelZeilen=r.liste.map(s=>`<tr onclick="nav('session',{session:'${esc(s.id)}'})" style="cursor:pointer">
-      <td><b>${esc(s.id)}</b><br><small class="hint">${esc(s.typ||'')}${s.dateien?' · '+s.dateien+' Dateien':''}${s.reels?' · '+s.reels+' Reels':''}</small></td>
-      <td>${esc(s.datum||'')}</td>
-      <td><span class="pill ${esc(s.status)}">${esc(LABEL[s.status]||s.status)}</span></td>
-      <td style="width:170px">${ladder(s.status)}</td></tr>`).join('');
-    const storyZeilen=sr.liste.map(s=>`<tr onclick="nav('storyroh',{name:'${esc(s.name).replace(/'/g,"\\'")}'})" style="cursor:pointer"><td><b>${esc(s.name)}</b><br><small class="hint">${esc(s.quelle)}${s.einzeldatei?' · Einzeldatei':' · '+s.dateien+' Dateien'}</small></td>
-      <td>${esc(zeitseit(s.mtime))}</td></tr>`).join('');
-    const kacheln=arc?arc.bilder.map(b=>`<figure style="margin:0">
-      <a href="${b.url}" target="_blank"><img onerror="bildFehlt(this)" src="${b.url}" style="width:100%;border-radius:12px;border:1px solid var(--line);display:block"></a>
-      <figcaption class="meta" style="margin-top:6px">${esc(b.slot)}</figcaption></figure>`).join(''):'';
-
-    const hu=(d.heuteUploads&&d.heuteUploads.stories)||[];
-    const heuteKarten=hu.map(st=>`<div class="card" style="padding:12px">
-      <div class="row" style="justify-content:space-between;align-items:center">
-        <b style="font-size:14px">${esc(st.name)}</b>
-        <span class="pill ${st.status==='bereit'?'ok':st.status==='fehler'?'fehler':''}">${esc(st.status)}</span></div>
-      <div class="meta" style="margin:4px 0 8px">${st.untertitel?('Untertitel: '+st.woerter+' Wörter'):(st.hinweis?esc(st.hinweis):'ohne Untertitel')} · hochgeladen ${esc((st.erstellt||'').slice(11))}</div>
-      ${st.url?`<video controls preload="metadata" style="width:100%;border-radius:10px" src="${st.url}"></video>`:''}
-      ${st.grund?`<p class="sub" style="color:var(--red)">${esc(st.grund)}</p>`:''}
-    </div>`).join('');
-
-    const st=d.stand||{};
-    const stufe=(zahl,text,ziel)=>`<div class="kpi" style="cursor:pointer" onclick="nav('${ziel}')"><span>${text}</span><b>${zahl}</b></div>`;
-    m.innerHTML=`<h1>Übersicht</h1>
-
-    ${st.bremse?`<div class="card" style="border-left:3px solid var(--yellow);margin-bottom:18px">
-      <b style="font-size:14px">Verarbeitung pausiert: ${esc(st.bremse.grund)}</b>
-      <div class="meta" style="font-size:12px;margin-top:4px">seit ${esc(String(st.bremse.zeit||'').replace('T',' '))} · schützt vor unbemerkten API-Kosten. Höher setzen? Sag Bescheid.</div></div>`:''}
-    ${st.laeuft?`<div class="card" style="border-color:var(--camel);margin-bottom:18px">
-      <b style="font-size:14px">Läuft gerade: ${esc(st.laeuft.session)}</b>
-      <div class="meta" style="font-size:12px;margin-top:4px">seit ${st.laeuft.minuten} Min · ${esc((st.laeuft.letzte||[]).slice(-1)[0]||'')}</div></div>`:''}
-
-    <div class="sec"><h2>Wo liegt was</h2>
-      <div class="kpi-grid">
-        ${stufe(st.reels?.roh??0,'Reels · Rohmaterial','eingang')}
-        ${stufe(st.reels?.vorschnitt??0,'Reels · im Vorschnitt','vorschnitt')}
-        ${stufe((st.karussells?.eingang??0)+(st.karussells?.pruefung??0),'Karussells · offen','karFrei')}
-        ${stufe(st.storys?.pruefung??0,'Storys · zur Freigabe','storyFrei')}
-      </div>
-      <div class="kpi-grid" style="margin-top:12px">
-        ${stufe(st.reels?.freigegeben??0,'Reels freigegeben','plan')}
-        ${stufe(st.karussells?.frei??0,'Karussells freigegeben','karFrei')}
-        ${stufe(st.storys?.frei??0,'Storys freigegeben','storyFrei')}
-        ${stufe(st.storys?.nacharbeit??0,'bei Nico in Nacharbeit','storyFrei')}
-      </div>
-    </div>
-
-    <div class="sec"><h2>Als Nächstes</h2><div class="card">
-      ${(st.geplant||[]).length?`<table><tr><th>Wann</th><th>Beitrag</th><th>Stand</th></tr>${st.geplant.map(g=>`
-        <tr onclick="nav('plan')" style="cursor:pointer"><td>${esc(g.datum)} ${esc(g.uhrzeit)}</td>
-        <td>${esc(String(g.titel).slice(0,60))}</td><td><span class="pill">${esc(g.status)}</span></td></tr>`).join('')}</table>`
-        :'<p class="meta" style="margin:0">Nichts eingeplant — im Contentplan einen Termin setzen.</p>'}
-      <div class="row" style="margin-top:12px"><button class="btn ghost" onclick="nav('plan')">Zum Contentplan →</button>
-      <button class="btn ghost" onclick="nav('upload')">Material hochladen →</button></div>
-    </div></div>
-
-    ${(st.protokoll||[]).length?`<div class="sec"><h2>Zuletzt erledigt</h2><div class="card">
-      ${st.protokoll.map(a=>`<div class="aufz" onclick="auftragOeffnen('${esc(a.id)}')">
-        <span class="dot ${a.status==='läuft'?'laeuft':a.status==='fehler'?'fehler':'fertig'}"></span>
-        <div style="min-width:0;flex:1"><b>${esc(a.was||a.cmd)}</b>
-        <span class="meta" style="font-size:11px">${zeit(a.start)}${a.ende?' · '+dauer(a.start,a.ende):''}</span>
-        ${a.ergebnis?`<div class="erg">${esc(String(a.ergebnis).slice(0,160))}</div>`:''}</div></div>`).join('')}
-    </div></div>`:''}
-
-
-    <div class="sec"><h2>Storys</h2><div class="card">
-      <div class="row" style="gap:10px;flex-wrap:wrap">
-        <button class="btn ghost" onclick="nav('storyFrei')">Zur Freigabe →</button>
-        <button class="btn ghost" onclick="nav('storyRoh')">Rohmaterial →</button>
-        <button class="btn ghost" onclick="nav('upload')">Story hochladen →</button>
-      </div></div></div>`;
-  });
-}
-
-function vFrei(m){
-  m.innerHTML='<h1>Freigegebener Content</h1><div class="grid" id="freigrid">lädt …</div>';
-  api('/api/frei').then(d=>{const g=$('#freigrid');if(!g)return;g.innerHTML=(d.reels||[]).map(r=>`<div class="card"><span class="pill freigegeben">freigegeben</span><h3 style="margin-top:8px">${esc(r.titel)}</h3><div class="meta">CTA ${esc(r.cta||'–')}</div><p style="font-size:13px;color:var(--grey);margin:8px 0">${esc(r.caption)}…</p><video controls preload="metadata" style="max-width:100%" src="/ready/${encodeURIComponent(r.slug)}/reel.mp4"></video><div class="row" style="margin-top:10px"><button class="btn" onclick="nav('plan')">In den Contentplan →</button></div></div>`).join('')||''});
-}
+// ===== Reels: Rohmaterial, Aufnahme, Vorschnitt, Reel-Seite, Schnitt- und Untertitel-Editor, Schnittstudio =====
+// Vorschnitt ans Schnittstudio geben (Ue-EIN). Die Automatik legt das Paket nach jedem Bau von selbst ab;
+// der Knopf baut es neu, z. B. nach einer Aenderung am Vorschnitt. CapCut ist seit 10.10.2026 raus.
+function schnittstudioPaket(pfad){ job(['schnittstudio-paket', pfad], 'Paket fürs Schnittstudio bauen'); }
+async function sessionEntfernen(id){if(!confirm('Diesen Upload aus dem Eingang entfernen? (Datei wird verschoben, nicht gelöscht)'))return;if(await tun('/api/session-entfernen',{id},'Aus dem Eingang entfernt')){await load();nav('eingang')}}
 let VS={suche:'',alle:false};
 function vVorschnitt(){
  const imStudio=new Set(((S.schnittstudio||{}).pakete||[]).map(p=>p.slug));
@@ -1666,20 +1699,6 @@ function vEingang(){
     ${ladder(s.status)}<div style='height:7px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden'><i style='display:block;height:100%;width:${s.fortschritt??0}%;background:linear-gradient(90deg,var(--camel),var(--yellow))'></i></div><div class='meta' style='margin-top:4px'>${s.fortschritt??0} % verarbeitet</div></div>`).join('')}</div>
   ${S.jobs.length?`<div class="sec"><h2>Letzte Läufe</h2><table>${S.jobs.map(j=>`<tr><td>${esc(j.start.slice(11,16))}</td><td>tet-reel ${esc(j.cmd)}</td><td><span class="pill ${j.status==='fehler'?'fehler':j.status==='fertig'?'ok':''}">${esc(j.status)}</span></td></tr>`).join('')}</table></div>`:''}`;
 }
-// Eigene Upload-Seite (Anne 17.09.): alle Upload-Wege an einem Ort, samt Link fuer Externe
-function vUpload(m){
-  m.innerHTML=`<h1>Upload</h1>
-    <div class="sec"><h2>Material hochladen</h2><div class="card"><div id="uplBox"></div></div></div>
-    <div class="sec"><h2>Link für Externe</h2><div class="card">
-      <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">
-        <button class="btn" onclick="uploadLink()">Link kopieren</button>
-        <span class="meta" id="uplLinkText">ohne Login, nur mit Schlüssel — für Team und Externe</span>
-      </div></div></div>
-    <div class="sec"><h2>Claude-Zugang</h2><div class="card"><div id="claudeZugang"></div></div></div>`;
-  uplFormular('uplBox',''); claudeZugang();
-  api('/api/upload-link').then(d=>{const e=document.getElementById('uplLinkText');if(e&&d.link)e.textContent=d.link});
-  return '';
-}
 // Seite „Schnittstudio" (10.10.2026): Hier stand ein klickbarer Entwurf mit Beispieldaten. Geschnitten wird
 // im escape-schnittstudio, einem eigenen Programm; diese Seite zeigt, welche Vorschnitte dort bereitliegen.
 function vStudio(m){
@@ -1699,197 +1718,6 @@ function vStudio(m){
   <div class="sec"><h2>Dort liegen bereit (${(st.pakete||[]).length})</h2>
     ${karten?`<div class="grid">${karten}</div>`:'<p class="meta">Noch kein Vorschnitt übergeben.</p>'}</div>`;
 }
-function vKarRoh(m){ karListe(m,'roh') }
-function vKarFrei(m){ karListe(m,'frei') }
-function karListe(m,art){
-  const titel = art==='roh' ? 'Karussells · Rohmaterial' : 'Karussells · Freigabe';
-  m.innerHTML=`<h1>${titel}</h1><div id="ksBox">lädt …</div>`;
-  api('/api/karussells').then(d=>{const b=$('#ksBox');if(!b)return;
-    if(!d||!Array.isArray(d.karussells)){b.innerHTML='<p class="meta">Konnte nicht laden — versuche es gleich noch einmal …</p>';
-      clearTimeout(window._ksT);window._ksT=setTimeout(()=>{if(view==='karRoh'||view==='karFrei')karListe(m,art)},3000);return}
-    const ks=d.karussells;
-    // Anne 17.09.: „bei den Karussells sehe ich nach wie vor nichts." Meine erste Aufteilung war
-    // falsch — „Rohmaterial = ohne Seiten" traf auf kein einziges Karussell zu, die Seite war immer leer.
-    // Richtig: Rohmaterial = alles, was hereinkam und noch nicht freigegeben ist. Freigabe = das Freigegebene.
-    const gruppen = art==='roh'
-      ? [['zur-pruefung','Eingelaufen — warten auf Freigabe']]
-      : [['bereit-zum-posten','Freigegeben — im Contentplan'],['gepostet','Gepostet']];
-    const passt=(x,g)=>x.phase===g;
-    b.innerHTML=gruppen.map(([g,t])=>{const xs=ks.filter(x=>passt(x,g));
-      return xs.length?`<div class="sec"><h2>${t} <span class="pill">${xs.length}</span></h2>
-      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${xs.map(x=>`
-        <div class="card">
-          ${x.bild?`<img onerror="bildFehlt(this)" src="${x.bild}" style="width:100%;border-radius:8px;display:block;margin-bottom:8px">`:'<div class="meta" style="font-size:12px;margin-bottom:8px">noch keine Seiten</div>'}
-          <b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
-          <span class="meta" style="font-size:11px">${esc(KAR_ART[x.art]||x.art)}${x.slides?` · ${x.slides} Seiten`:''}${x.material?` · ${x.material} Material`:''}</span>
-          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto;margin-top:6px">${esc(x.notizen.slice(0,200))}</div>`:''}
-          <div class="row" style="gap:6px;margin-top:8px">
-            <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.name)}'})">Öffnen</button>
-            ${g==='zur-pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="ksFreigeben('${esc(x.name)}')">Freigeben</button>`:''}
-            ${g==='bereit-zum-posten'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>`:''}
-          </div></div>`).join('')}</div></div>`:''}).join('')
-      || `<p class="meta">${art==='roh'
-            ? 'Nichts Offenes — alles ist freigegeben. <a class="netz" style="cursor:pointer" onclick="nav(\'karFrei\')">zur Freigabe →</a>'
-            : 'Noch nichts freigegeben. <a class="netz" style="cursor:pointer" onclick="nav(\'karRoh\')">zum Rohmaterial →</a>'}</p>`});
-  return '';
-}
-// Storys: Rohmaterial und Freigabe getrennt
-function vStoryRohListe(m){ storyListe(m,'roh') }
-function vStoryFrei(m){ storyListe(m,'frei') }
-// Der Ordnername traegt die Upload-Kennung; im Tool zaehlt der Dateiname, nicht der Zeitstempel.
-function storyTitel(x){
-  let t = x.name || '';
-  t = t.replace(/^(upload|icloud)-\d{4}-\d\d-\d\d-\d\d-?\d\d-/, '');
-  const teile = t.split('-');
-  if (teile.length > 1 && teile[teile.length-1].toLowerCase().replace(/_/g,'') === teile[0].toLowerCase().replace(/_/g,'')) t = teile[teile.length-1];
-  return t.replace(/_/g,' ').trim() || x.name;
-}
-function storyListe(m,art){
-  const titel = art==='roh' ? 'Storys · Rohmaterial' : 'Storys · Freigabe';
-  m.innerHTML=`<h1>${titel}</h1><div id="stBox">lädt …</div>`;
-  api('/api/storys').then(d=>{const b=$('#stBox');if(!b)return;
-    // Ein fehlgeschlagener Abruf darf nicht wie „nichts da" aussehen (Anne 17.09.)
-    if(!d||!Array.isArray(d.storys)){b.innerHTML='<p class="meta">Konnte nicht laden — versuche es gleich noch einmal …</p>';
-      clearTimeout(window._stT);window._stT=setTimeout(()=>{if(view==='storyRoh'||view==='storyFrei')storyListe(m,art)},3000);return}
-    const xs=d.storys;
-    const gruppen = art==='roh'
-      ? [['rohmaterial','Eingelaufen — bekommt automatisch Untertitel']]
-      : [['pruefung','Zur Freigabe — Untertitel sind drauf'],['freigegeben','Freigegeben — im Contentplan'],['nacharbeit','Bei Nico in Nacharbeit']];
-    b.innerHTML=gruppen.map(([ph,t])=>{const g=xs.filter(x=>x.phase===ph);
-      return g.length?`<div class="sec"><h2>${t} <span class="pill">${g.length}</span></h2>
-      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${g.map(x=>`
-        <div class="card">${x.absender?`<div class="eyebrow">von ${esc(x.absender)}</div>`:''}<b style="font-size:13px;line-height:1.25;display:block">${esc(storyTitel(x))}</b>${x.hinweis?`<div class="meta" style="font-size:11px;margin-top:2px">${esc(x.hinweis.slice(0,120))}</div>`:''}
-          ${x.video?`<video src="${x.video}" ${x.bild?`poster="${x.bild}"`:''} controls preload="none" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:var(--tint);aspect-ratio:9/16;object-fit:cover"></video>`
-                   :`<div class="meta" style="font-size:11px;margin:8px 0">${x.dateien||0} Datei(en) · ${esc(x.quelle||'')}</div>`}
-          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto">${esc(x.notizen.slice(0,200))}</div>`:''}
-          <div class="row" style="gap:6px;margin-top:8px">
-            ${ph==='pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="stFreigeben('${esc(x.name)}')">Freigeben</button>
-              <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
-            ${ph==='freigegeben'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>
-              <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
-            ${ph==='rohmaterial'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('storyroh',{name:'${esc(x.name)}'})">Ansehen</button>`
-              :`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyAendern('${esc(x.name)}','${esc(x.video||'')}')">Ändern …</button>${x.phase==='nacharbeit'?`
-              <button class="btn" style="font-size:12px;padding:5px 10px" onclick="stZurFreigabe('${esc(x.name)}')">Zurück in die Freigabe</button>`:''}`}
-          </div></div>`).join('')}</div></div>`:''}).join('')
-      || `<p class="meta">${art==='roh'
-            ? 'Kein offenes Rohmaterial'+(xs.length?' — alles verarbeitet. '+xs.length+' Storys liegen weiter hinten: ':' ')+(xs.length?'<a class="netz" style="cursor:pointer" onclick="nav(\'storyFrei\')">zur Freigabe →</a>':'')
-            : 'Nichts zur Freigabe'+(xs.length?' — '+xs.length+' Storys sind noch Rohmaterial: <a class="netz" style="cursor:pointer" onclick="nav(\'storyRoh\')">ansehen →</a>':'')}</p>`});
-  return '';
-}
-// Eigene Seite fuer Karussells (Anne 17.09.): erst prueft jemand, dann steht es im Contentplan
-const KAR_ART={fertig:'fertige Seiten',material:'Rohmaterial — Nico baut die Seiten',anweisung:'nur Anweisungen'};
-function vKarussells(m){
-  m.innerHTML='<h1>Karussells</h1><div id="ksBox">lädt …</div>';
-  api('/api/karussells').then(d=>{const b=$('#ksBox');if(!b)return;
-    const ks=d.karussells||[];
-    const gruppen=[['zur-pruefung','Zur Prüfung'],['bereit-zum-posten','Freigegeben — im Contentplan'],['gepostet','Gepostet']];
-    b.innerHTML=gruppen.map(([ph,titel])=>{const xs=ks.filter(x=>x.phase===ph);
-      return xs.length?`<div class="sec"><h2>${titel} <span class="pill">${xs.length}</span></h2>
-      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${xs.map(x=>`
-        <div class="card">
-          ${x.bild?`<img onerror="bildFehlt(this)" src="${x.bild}" style="width:100%;border-radius:8px;display:block;margin-bottom:8px">`:'<div class="meta" style="font-size:12px;margin-bottom:8px">noch keine Seiten</div>'}
-          <b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
-          <span class="meta" style="font-size:11px">${esc(KAR_ART[x.art]||x.art)} · ${x.slides} Seiten${x.material?` · ${x.material} Material`:''}</span>
-          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto;margin-top:6px">${esc(x.notizen.slice(0,200))}</div>`:''}
-          <div class="row" style="gap:6px;margin-top:8px">
-            <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.name)}'})">Öffnen</button>
-            ${ph==='zur-pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="ksFreigeben('${esc(x.name)}')">Freigeben</button>`:''}
-            ${ph==='bereit-zum-posten'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>`:''}
-          </div></div>`).join('')}</div></div>`:''}).join('')||'<p class="meta">Noch keine Karussells.</p>'});
-  return '';
-}
-function ksFreigeben(name){
-  // Nach dem Freigeben auf DERSELBEN Seite bleiben (vorher sprang die Ansicht auf eine alte Sammelseite).
-  tun('/api/karussell/'+encodeURIComponent(name),{freigeben:true},'✓ Freigegeben — steht jetzt im Contentplan')
-    .then(r=>{if(!r)return;MATERIAL=null;materialFrisch(true);render()})}
-
-// Eigene Seite fuer Storys: Rohmaterial -> untertitelt (zur Pruefung) -> freigegeben
-function vStorys(m){
-  m.innerHTML='<h1>Storys</h1><div id="stBox">lädt …</div>';
-  api('/api/storys').then(d=>{const b=$('#stBox');if(!b)return;
-    const xs=d.storys||[];
-    const gruppen=[['pruefung','Zur Prüfung — Untertitel sind drauf'],['freigegeben','Freigegeben — im Contentplan'],['nacharbeit','Bei Nico in Nacharbeit'],['rohmaterial','Rohmaterial — wird verarbeitet']];
-    b.innerHTML=gruppen.map(([ph,titel])=>{const g=xs.filter(x=>x.phase===ph);
-      return g.length?`<div class="sec"><h2>${titel} <span class="pill">${g.length}</span></h2>
-      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${g.map(x=>`
-        <div class="card"><b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
-          ${x.video?`<video src="${x.video}" controls preload="metadata" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:#000"></video>`
-                   :`<div class="meta" style="font-size:11px;margin:8px 0">${x.dateien||0} Datei(en) · ${esc(x.quelle||'')}</div>`}
-          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto">${esc(x.notizen.slice(0,200))}</div>`:''}
-          <div class="row" style="gap:6px;margin-top:8px">
-            ${ph==='pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="stFreigeben('${esc(x.name)}')">Freigeben</button>
-              <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
-            ${ph==='freigegeben'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>
-              <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
-            ${ph==='rohmaterial'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('storyroh',{name:'${esc(x.name)}'})">Ansehen</button>`:''}
-          </div></div>`).join('')}</div></div>`:''}).join('')||'<p class="meta">Noch keine Storys.</p>'});
-  return '';
-}
-function stZurFreigabe(name){
-  tun('/api/story-freigeben',{name,aus:'nacharbeit'},'✓ Liegt wieder zur Freigabe bereit').then(r=>{if(r)render()})}
-function stFreigeben(name){
-  tun('/api/story-freigeben',{name},'✓ Freigegeben — steht jetzt im Contentplan')
-    .then(r=>{if(!r)return;MATERIAL=null;materialFrisch(true);render()})}
-// Aenderungswuensche zu einer Story. Anne 17.09.: „Dafuer kannst du mir gerne hier noch ein Tool
-// einbauen, dass ich da einfach einen Regler habe zum Verschieben. Ansonsten wird in den Storys
-// nichts geschnitten." Genau darum kann dieses Fenster nur: trimmen, Untertitel neu, zurueck an Nico.
-function storyAendern(name, video){
-  const d=document.createElement('div'); d.className='fenster'; d.id='stAnwModal';
-  d.innerHTML=`<div class="box" style="width:min(520px,94vw)">
-    <div class="row" style="justify-content:space-between;align-items:baseline">
-      <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:19px;margin:0">${esc(name)}</h2>
-      <button class="btn ghost" onclick="document.getElementById('stAnwModal').remove()">schließen</button></div>
-    ${video?`<video src="${video}" controls preload="metadata" playsinline style="width:100%;max-width:230px;border-radius:10px;margin:12px auto 0;display:block;background:#000"></video>`:''}
-    <div class="sec"><h2>Vorne / hinten kürzen</h2>
-      <div class="row" style="gap:10px;align-items:center;margin-bottom:8px">
-        <span class="meta" style="width:52px">vorne</span>
-        <input type="range" id="stVorn" min="0" max="10" step="0.5" value="0" oninput="document.getElementById('stVornW').textContent=this.value+' s'" style="flex:1">
-        <span class="meta" id="stVornW" style="width:46px;text-align:right">0 s</span></div>
-      <div class="row" style="gap:10px;align-items:center">
-        <span class="meta" style="width:52px">hinten</span>
-        <input type="range" id="stHinten" min="0" max="10" step="0.5" value="0" oninput="document.getElementById('stHintenW').textContent=this.value+' s'" style="flex:1">
-        <span class="meta" id="stHintenW" style="width:46px;text-align:right">0 s</span></div></div>
-    <div class="sec"><h2>Anweisung</h2>
-      <textarea id="stAnwText" style="min-height:76px" placeholder="Untertitel neu · zurück an Nico"></textarea></div>
-    <div id="stAnwListe" class="meta" style="font-size:11px;white-space:pre-wrap"></div>
-    <div class="row" style="margin-top:14px;justify-content:flex-end">
-      <button class="btn btn-primary" onclick="storyAendernSenden('${esc(name)}')">Ausführen</button></div></div>`;
-  d.onclick=(e)=>{if(e.target===d)d.remove()};
-  document.body.appendChild(d);
-  api('/api/story-anweisungen/'+encodeURIComponent(name)).then(r=>{const b=document.getElementById('stAnwListe');
-    if(!b)return; const xs=(r.anweisungen||[]).slice(-4).reverse();
-    b.innerHTML=xs.map(a=>`${esc(a.zeit||'')} · ${esc(a.text||'')}${a.ergebnis?' → '+esc(a.ergebnis):''}`).join('<br>')});
-}
-function storyAendernSenden(name){
-  const v=parseFloat(document.getElementById('stVorn').value||0), h=parseFloat(document.getElementById('stHinten').value||0);
-  const frei=(document.getElementById('stAnwText').value||'').trim();
-  const teile=[];
-  if(v>0)teile.push('vorne '+v+' s weg');
-  if(h>0)teile.push('hinten '+h+' s weg');
-  if(frei)teile.push(frei);
-  if(!teile.length)return toast('Regler bewegen oder Anweisung schreiben');
-  document.getElementById('stAnwModal').remove();
-  job(['story-anweisung',name],'Story ändern · '+name, {url:'/api/story-anweisung', body:{name, text:teile.join(', ')}});
-}
-// Online liegen nur die kleinen Web-Fassungen; die Originale gibt es ausschliesslich auf Annes Mac.
-// Zeigte das Tool trotzdem auf den Mac-Pfad, kam ein schwarzer Kasten ohne Erklaerung
-// (Anne 18.09.: „wo liegt gerade wieder das Problem, dass ich keine Videos sehen kann?").
-// Jetzt: entweder ein Video, das wirklich da ist — oder ein Satz, der sagt, woran es liegt.
-// Fehlt ein Bild (online meist: noch nicht hochgeladen), zeigt der Browser ein kaputtes Symbol.
-// Das sagt niemandem etwas — deshalb an seiner Stelle ein grauer Platz mit einem Satz.
-function bildFehlt(el){
-  // Erst noch ein paar Mal versuchen: Eine eben gebaute oder eben hochgeladene Vorschau ist oft Sekunden spaeter da
-  // (online holt der Dienst sie beim ersten Zugriff vom Rechner). Vorher blieb der Platzhalter fuer immer stehen.
-  const n=+(el.dataset.versuch||0);
-  if(n<6&&el.isConnected){el.dataset.versuch=n+1; const u=(el.getAttribute('src')||'').replace(/[?&]neu=\d+$/,'');
-    setTimeout(()=>{if(el.isConnected)el.src=u+(u.includes('?')?'&':'?')+'neu='+Date.now()},n?5000:2500); return}
-  if(el.dataset.weg) return; el.dataset.weg='1';
-  const d=document.createElement('div');
-  d.className='meta';
-  d.style.cssText='display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;background:var(--tint);border-radius:8px;padding:14px;min-height:60px';
-  d.textContent = window.HOSTED ? 'Bild wird noch übertragen' : 'Bild nicht gefunden';
-  el.replaceWith(d);
-}
 function videoFeld(d, base){
   if(!d.dateien||!d.dateien.video) return '';
   if(d.videoKlein) return `<video controls preload="metadata" src="${d.videoKlein}"></video>`;
@@ -1898,50 +1726,6 @@ function videoFeld(d, base){
     <b style="display:block;font-size:14px">Web-Fassung wird noch übertragen</b>
     <span class="meta" style="font-size:12px">Der Vorschnitt ist fertig — die kleine Fassung fürs Web lädt gerade hoch. In ein paar Minuten ist er hier abspielbar.</span>
     <div class="row" style="justify-content:center;margin-top:10px"><button class="btn ghost" style="font-size:12px" onclick="render()">Neu laden</button></div></div>`;
-}
-function vKarussell(m){
-  m.innerHTML='<h1>'+esc(cur.name||'')+'</h1><div id="kaBox">lädt …</div>';
-  api('/api/karussell/'+encodeURIComponent(cur.name)).then(d=>{const b=$('#kaBox');if(!b)return;
-    if(d.error){b.innerHTML='<p class="meta">'+esc(d.error)+'</p>';return}
-    KA={name:d.name,reihenfolge:(d.slides||[]).map(x=>x.name)};
-    b.innerHTML=`<div class="row" style="gap:8px;margin-bottom:14px"><span class="pill ${d.phase==='bereit-zum-posten'?'freigegeben':''}">${esc(d.phase)}</span>
-      <span class="meta">${(d.slides||[]).length} Slides</span></div>
-    <div class="grid" id="kaSlides" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">${(d.slides||[]).map((x,i)=>`
-      <div class="card" draggable="true" data-n="${esc(x.name)}" ondragstart="kaZieht(event,'${esc(x.name)}')" ondragover="event.preventDefault()" ondrop="kaDrop(event,'${esc(x.name)}')" style="padding:8px;cursor:grab">
-        <img onerror="bildFehlt(this)" src="${x.url}" style="width:100%;border-radius:8px;display:block">
-        <div class="row" style="justify-content:space-between;margin-top:6px"><span class="meta">${i+1}</span>
-        <button class="btn ghost" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();kaLoeschen('${esc(x.name)}')">entfernen</button></div>
-      </div>`).join('')}</div>
-    <div class="sec"><h2>Caption</h2><textarea id="kaCaption" style="min-height:160px">${esc(d.caption||'')}</textarea>
-    <div class="row" style="margin-top:10px"><button class="btn" onclick="kaSpeichern()">Caption speichern</button>
-    ${d.phase==='zur-pruefung'?'<button class="btn ghost" onclick="kaFreigeben()">Freigeben</button>':''}
-    <button class="btn ghost" onclick="nav('plan')">Zum Contentplan →</button></div></div>`});
-  return '';
-}
-let KA={name:'',reihenfolge:[]}, KAZIEHT=null;
-function kaZieht(ev,n){KAZIEHT=n}
-function kaDrop(ev,ziel){ev.preventDefault();if(!KAZIEHT||KAZIEHT===ziel)return;
-  const r=KA.reihenfolge.filter(x=>x!==KAZIEHT), i=r.indexOf(ziel);
-  r.splice(i<0?r.length:i,0,KAZIEHT); KAZIEHT=null;
-  tun('/api/karussell/'+encodeURIComponent(KA.name),{reihenfolge:r},'Reihenfolge gespeichert').then(()=>render())}
-function kaLoeschen(n){if(!confirm('Slide entfernen?'))return;
-  tun('/api/karussell/'+encodeURIComponent(KA.name),{loeschen:n},'Slide entfernt').then(()=>render())}
-function kaSpeichern(){tun('/api/karussell/'+encodeURIComponent(KA.name),{caption:document.getElementById('kaCaption').value},'✓ Caption gespeichert')}
-function kaFreigeben(){tun('/api/karussell/'+encodeURIComponent(KA.name),{freigeben:true},'✓ Freigegeben — steht jetzt im Contentplan').then(r=>{if(!r)return;MATERIAL=null;render()})}
-
-function vStoryRoh(m){
-  m.innerHTML='<h1>'+esc(cur.name||'')+'</h1><div id="srBox">lädt …</div>';
-  api('/api/storyroh/'+encodeURIComponent(cur.name)).then(d=>{const b=$('#srBox');if(!b)return;
-    if(d.error){b.innerHTML='<p class="meta">'+esc(d.error)+'</p>';return}
-    b.innerHTML=`<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px"><span class="pill">${esc(d.quelle)}</span><span class="pill">${d.dateien.length} Datei(en)</span>${d.dropbox?`<a class="btn ghost" target="_blank" rel="noopener" href="${d.dropbox}">Dropbox-Ordner ↗</a>`:''}</div>
-    <div class="grid">${d.dateien.map(f=>`<div class="card"><b>${esc(f.name)}</b><div class="meta">${Math.round(f.groesse/1e6)} MB · ${esc(f.mtime)}</div>
-      <div class="srV" style="margin:8px 0">${f.vorschau?`<video src="${f.vorschau}" controls preload="metadata" style="width:100%;max-width:240px;border-radius:10px"></video>`:`<div class="meta" style="font-size:12px">Vorschau wird gerade erzeugt …</div>`}</div>
-      <div class="row" style="gap:8px"><button class="btn" onclick="if(confirm('Diese Story bekommt jetzt Untertitel und wird für HEUTE eingeplant — sie geht ohne weitere Freigabe raus.\n\nWirklich?'))job(['story-heute','${esc(f.pfad).replace(/'/g,"\\'")}'],'Untertitel + sofort posten')">⚡ Untertitel + sofort posten</button></div></div>`).join('')}</div>
-    <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>`;
-    // Vorschau wird gerade gebaut -> in Ruhe nachladen, bis sie da ist
-    if(d.vorschauLaeuft && view==='storyroh'){clearTimeout(window._srT);window._srT=setTimeout(()=>{if(view==='storyroh')vStoryRoh(m)},6000)}
-  });
-  return '';
 }
 function vSession(){
   const s=S.sessions.find(x=>x.id===cur.session)||S.sessions[0]; if(!s) return '<p>keine Session</p>'; cur.session=s.id;
@@ -2184,6 +1968,269 @@ async function capSave(){
 }
 
 
+function reelTechnik(){const e=document.getElementById('reelTechnik');if(e)e.hidden=!e.hidden}
+// Nico schreibt einen Änderungswunsch unter das Reel, Claude setzt ihn um (Anne 17.09.)
+async function anweisungSenden(dir){
+  const t=document.getElementById('anwText'), st=document.getElementById('anwStatus');
+  const text=(t.value||'').trim(); if(!text)return toast('Bitte die Änderung beschreiben');
+  st.textContent='geht an den Rechner …';
+  const r=await post('/api/anweisung',{reel:dir,text,von:uplAbsender()||'Team'});
+  if(r.error){st.textContent=r.error;return}
+  t.value=''; st.textContent='läuft — das Reel wird neu gebaut';
+  anweisungenLaden(dir);
+  if(r.job){const p=setInterval(async()=>{const j=await api('/api/job/'+r.job);
+    if(j.status&&j.status!=='läuft'){clearInterval(p);st.textContent='fertig';anweisungenLaden(dir);auftragOeffnen(r.job)}},3000)}
+}
+async function anweisungenLaden(dir){
+  const box=document.getElementById('anwListe'); if(!box)return;
+  const d=await api('/api/anweisungen/'+encodeURIComponent(dir));
+  const l=(d.anweisungen||[]).slice().reverse();
+  box.innerHTML=l.length?l.map(a=>`<div class="aufz" style="cursor:default">
+      <span class="dot ${a.status==='erledigt'?'fertig':a.status==='fehler'?'fehler':'laeuft'}"></span>
+      <div style="min-width:0;flex:1"><b>${esc(a.text)}</b>
+      <span class="meta" style="font-size:11px">${esc(a.von||'')} · ${esc(String(a.zeit||'').replace('T',' '))} · ${esc(a.status||'')}</span>
+      ${a.ergebnis?`<div class="erg">${esc(a.ergebnis)}</div>`:''}
+      ${a.von_hand?`<div class="erg" style="color:var(--red)">von Hand: ${esc(a.von_hand)}</div>`:''}</div></div>`).join('')
+    :'<p class="meta" style="margin:0">Noch keine Anweisung.</p>';
+}
+// ===== Storys =====
+async function storyFreigeben(name){
+  const d=await post('/api/story/freigeben',{name});
+  toast(d.ok?'✓ Stories freigegeben — die Routine plant sie ein.':(d.error||'Fehler'));
+  render();
+}
+// Storys: Rohmaterial und Freigabe getrennt
+function vStoryRohListe(m){ storyListe(m,'roh') }
+function vStoryFrei(m){ storyListe(m,'frei') }
+// Der Ordnername traegt die Upload-Kennung; im Tool zaehlt der Dateiname, nicht der Zeitstempel.
+function storyTitel(x){
+  let t = x.name || '';
+  t = t.replace(/^(upload|icloud)-\d{4}-\d\d-\d\d-\d\d-?\d\d-/, '');
+  const teile = t.split('-');
+  if (teile.length > 1 && teile[teile.length-1].toLowerCase().replace(/_/g,'') === teile[0].toLowerCase().replace(/_/g,'')) t = teile[teile.length-1];
+  return t.replace(/_/g,' ').trim() || x.name;
+}
+function storyListe(m,art){
+  const titel = art==='roh' ? 'Storys · Rohmaterial' : 'Storys · Freigabe';
+  m.innerHTML=`<h1>${titel}</h1><div id="stBox">lädt …</div>`;
+  api('/api/storys').then(d=>{const b=$('#stBox');if(!b)return;
+    // Ein fehlgeschlagener Abruf darf nicht wie „nichts da" aussehen (Anne 17.09.)
+    if(!d||!Array.isArray(d.storys)){b.innerHTML='<p class="meta">Konnte nicht laden — versuche es gleich noch einmal …</p>';
+      clearTimeout(window._stT);window._stT=setTimeout(()=>{if(view==='storyRoh'||view==='storyFrei')storyListe(m,art)},3000);return}
+    const xs=d.storys;
+    const gruppen = art==='roh'
+      ? [['rohmaterial','Eingelaufen — bekommt automatisch Untertitel']]
+      : [['pruefung','Zur Freigabe — Untertitel sind drauf'],['freigegeben','Freigegeben — im Contentplan'],['nacharbeit','Bei Nico in Nacharbeit']];
+    b.innerHTML=gruppen.map(([ph,t])=>{const g=xs.filter(x=>x.phase===ph);
+      return g.length?`<div class="sec"><h2>${t} <span class="pill">${g.length}</span></h2>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${g.map(x=>`
+        <div class="card">${x.absender?`<div class="eyebrow">von ${esc(x.absender)}</div>`:''}<b style="font-size:13px;line-height:1.25;display:block">${esc(storyTitel(x))}</b>${x.hinweis?`<div class="meta" style="font-size:11px;margin-top:2px">${esc(x.hinweis.slice(0,120))}</div>`:''}
+          ${x.video?`<video src="${x.video}" ${x.bild?`poster="${x.bild}"`:''} controls preload="none" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:var(--tint);aspect-ratio:9/16;object-fit:cover"></video>`
+                   :`<div class="meta" style="font-size:11px;margin:8px 0">${x.dateien||0} Datei(en) · ${esc(x.quelle||'')}</div>`}
+          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto">${esc(x.notizen.slice(0,200))}</div>`:''}
+          <div class="row" style="gap:6px;margin-top:8px">
+            ${ph==='pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="stFreigeben('${esc(x.name)}')">Freigeben</button>
+              <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
+            ${ph==='freigegeben'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>
+              <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
+            ${ph==='rohmaterial'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('storyroh',{name:'${esc(x.name)}'})">Ansehen</button>`
+              :`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyAendern('${esc(x.name)}','${esc(x.video||'')}')">Ändern …</button>${x.phase==='nacharbeit'?`
+              <button class="btn" style="font-size:12px;padding:5px 10px" onclick="stZurFreigabe('${esc(x.name)}')">Zurück in die Freigabe</button>`:''}`}
+          </div></div>`).join('')}</div></div>`:''}).join('')
+      || `<p class="meta">${art==='roh'
+            ? 'Kein offenes Rohmaterial'+(xs.length?' — alles verarbeitet. '+xs.length+' Storys liegen weiter hinten: ':' ')+(xs.length?'<a class="netz" style="cursor:pointer" onclick="nav(\'storyFrei\')">zur Freigabe →</a>':'')
+            : 'Nichts zur Freigabe'+(xs.length?' — '+xs.length+' Storys sind noch Rohmaterial: <a class="netz" style="cursor:pointer" onclick="nav(\'storyRoh\')">ansehen →</a>':'')}</p>`});
+  return '';
+}
+// Eigene Seite fuer Storys: Rohmaterial -> untertitelt (zur Pruefung) -> freigegeben
+function vStorys(m){
+  m.innerHTML='<h1>Storys</h1><div id="stBox">lädt …</div>';
+  api('/api/storys').then(d=>{const b=$('#stBox');if(!b)return;
+    const xs=d.storys||[];
+    const gruppen=[['pruefung','Zur Prüfung — Untertitel sind drauf'],['freigegeben','Freigegeben — im Contentplan'],['nacharbeit','Bei Nico in Nacharbeit'],['rohmaterial','Rohmaterial — wird verarbeitet']];
+    b.innerHTML=gruppen.map(([ph,titel])=>{const g=xs.filter(x=>x.phase===ph);
+      return g.length?`<div class="sec"><h2>${titel} <span class="pill">${g.length}</span></h2>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${g.map(x=>`
+        <div class="card"><b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
+          ${x.video?`<video src="${x.video}" controls preload="metadata" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:#000"></video>`
+                   :`<div class="meta" style="font-size:11px;margin:8px 0">${x.dateien||0} Datei(en) · ${esc(x.quelle||'')}</div>`}
+          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto">${esc(x.notizen.slice(0,200))}</div>`:''}
+          <div class="row" style="gap:6px;margin-top:8px">
+            ${ph==='pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="stFreigeben('${esc(x.name)}')">Freigeben</button>
+              <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
+            ${ph==='freigegeben'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>
+              <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
+            ${ph==='rohmaterial'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('storyroh',{name:'${esc(x.name)}'})">Ansehen</button>`:''}
+          </div></div>`).join('')}</div></div>`:''}).join('')||'<p class="meta">Noch keine Storys.</p>'});
+  return '';
+}
+function stZurFreigabe(name){
+  tun('/api/story-freigeben',{name,aus:'nacharbeit'},'✓ Liegt wieder zur Freigabe bereit').then(r=>{if(r)render()})}
+function stFreigeben(name){
+  tun('/api/story-freigeben',{name},'✓ Freigegeben — steht jetzt im Contentplan')
+    .then(r=>{if(!r)return;MATERIAL=null;materialFrisch(true);render()})}
+// Aenderungswuensche zu einer Story. Anne 17.09.: „Dafuer kannst du mir gerne hier noch ein Tool
+// einbauen, dass ich da einfach einen Regler habe zum Verschieben. Ansonsten wird in den Storys
+// nichts geschnitten." Genau darum kann dieses Fenster nur: trimmen, Untertitel neu, zurueck an Nico.
+function storyAendern(name, video){
+  const d=document.createElement('div'); d.className='fenster'; d.id='stAnwModal';
+  d.innerHTML=`<div class="box" style="width:min(520px,94vw)">
+    <div class="row" style="justify-content:space-between;align-items:baseline">
+      <h2 style="font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:19px;margin:0">${esc(name)}</h2>
+      <button class="btn ghost" onclick="document.getElementById('stAnwModal').remove()">schließen</button></div>
+    ${video?`<video src="${video}" controls preload="metadata" playsinline style="width:100%;max-width:230px;border-radius:10px;margin:12px auto 0;display:block;background:#000"></video>`:''}
+    <div class="sec"><h2>Vorne / hinten kürzen</h2>
+      <div class="row" style="gap:10px;align-items:center;margin-bottom:8px">
+        <span class="meta" style="width:52px">vorne</span>
+        <input type="range" id="stVorn" min="0" max="10" step="0.5" value="0" oninput="document.getElementById('stVornW').textContent=this.value+' s'" style="flex:1">
+        <span class="meta" id="stVornW" style="width:46px;text-align:right">0 s</span></div>
+      <div class="row" style="gap:10px;align-items:center">
+        <span class="meta" style="width:52px">hinten</span>
+        <input type="range" id="stHinten" min="0" max="10" step="0.5" value="0" oninput="document.getElementById('stHintenW').textContent=this.value+' s'" style="flex:1">
+        <span class="meta" id="stHintenW" style="width:46px;text-align:right">0 s</span></div></div>
+    <div class="sec"><h2>Anweisung</h2>
+      <textarea id="stAnwText" style="min-height:76px" placeholder="Untertitel neu · zurück an Nico"></textarea></div>
+    <div id="stAnwListe" class="meta" style="font-size:11px;white-space:pre-wrap"></div>
+    <div class="row" style="margin-top:14px;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="storyAendernSenden('${esc(name)}')">Ausführen</button></div></div>`;
+  d.onclick=(e)=>{if(e.target===d)d.remove()};
+  document.body.appendChild(d);
+  api('/api/story-anweisungen/'+encodeURIComponent(name)).then(r=>{const b=document.getElementById('stAnwListe');
+    if(!b)return; const xs=(r.anweisungen||[]).slice(-4).reverse();
+    b.innerHTML=xs.map(a=>`${esc(a.zeit||'')} · ${esc(a.text||'')}${a.ergebnis?' → '+esc(a.ergebnis):''}`).join('<br>')});
+}
+function storyAendernSenden(name){
+  const v=parseFloat(document.getElementById('stVorn').value||0), h=parseFloat(document.getElementById('stHinten').value||0);
+  const frei=(document.getElementById('stAnwText').value||'').trim();
+  const teile=[];
+  if(v>0)teile.push('vorne '+v+' s weg');
+  if(h>0)teile.push('hinten '+h+' s weg');
+  if(frei)teile.push(frei);
+  if(!teile.length)return toast('Regler bewegen oder Anweisung schreiben');
+  document.getElementById('stAnwModal').remove();
+  job(['story-anweisung',name],'Story ändern · '+name, {url:'/api/story-anweisung', body:{name, text:teile.join(', ')}});
+}
+function vStoryRoh(m){
+  m.innerHTML='<h1>'+esc(cur.name||'')+'</h1><div id="srBox">lädt …</div>';
+  api('/api/storyroh/'+encodeURIComponent(cur.name)).then(d=>{const b=$('#srBox');if(!b)return;
+    if(d.error){b.innerHTML='<p class="meta">'+esc(d.error)+'</p>';return}
+    b.innerHTML=`<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px"><span class="pill">${esc(d.quelle)}</span><span class="pill">${d.dateien.length} Datei(en)</span>${d.dropbox?`<a class="btn ghost" target="_blank" rel="noopener" href="${d.dropbox}">Dropbox-Ordner ↗</a>`:''}</div>
+    <div class="grid">${d.dateien.map(f=>`<div class="card"><b>${esc(f.name)}</b><div class="meta">${Math.round(f.groesse/1e6)} MB · ${esc(f.mtime)}</div>
+      <div class="srV" style="margin:8px 0">${f.vorschau?`<video src="${f.vorschau}" controls preload="metadata" style="width:100%;max-width:240px;border-radius:10px"></video>`:`<div class="meta" style="font-size:12px">Vorschau wird gerade erzeugt …</div>`}</div>
+      <div class="row" style="gap:8px"><button class="btn" onclick="if(confirm('Diese Story bekommt jetzt Untertitel und wird für HEUTE eingeplant — sie geht ohne weitere Freigabe raus.\n\nWirklich?'))job(['story-heute','${esc(f.pfad).replace(/'/g,"\\'")}'],'Untertitel + sofort posten')">⚡ Untertitel + sofort posten</button></div></div>`).join('')}</div>
+    <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>`;
+    // Vorschau wird gerade gebaut -> in Ruhe nachladen, bis sie da ist
+    if(d.vorschauLaeuft && view==='storyroh'){clearTimeout(window._srT);window._srT=setTimeout(()=>{if(view==='storyroh')vStoryRoh(m)},6000)}
+  });
+  return '';
+}
+// Story doch noch schneiden lassen (Anne 17.09.: „ich habe die Moeglichkeit, es zurueck an Nico zu geben")
+function storyZurueck(name){
+  const grund=prompt('Was soll Nico an „'+name+'" noch machen?','');
+  if(grund===null)return;
+  job(['story-zurueck',name,'--grund',grund],'Zurück an Nico: '+name);
+}
+// ===== Karussells =====
+function vKarRoh(m){ karListe(m,'roh') }
+function vKarFrei(m){ karListe(m,'frei') }
+function karListe(m,art){
+  const titel = art==='roh' ? 'Karussells · Rohmaterial' : 'Karussells · Freigabe';
+  m.innerHTML=`<h1>${titel}</h1><div id="ksBox">lädt …</div>`;
+  api('/api/karussells').then(d=>{const b=$('#ksBox');if(!b)return;
+    if(!d||!Array.isArray(d.karussells)){b.innerHTML='<p class="meta">Konnte nicht laden — versuche es gleich noch einmal …</p>';
+      clearTimeout(window._ksT);window._ksT=setTimeout(()=>{if(view==='karRoh'||view==='karFrei')karListe(m,art)},3000);return}
+    const ks=d.karussells;
+    // Anne 17.09.: „bei den Karussells sehe ich nach wie vor nichts." Meine erste Aufteilung war
+    // falsch — „Rohmaterial = ohne Seiten" traf auf kein einziges Karussell zu, die Seite war immer leer.
+    // Richtig: Rohmaterial = alles, was hereinkam und noch nicht freigegeben ist. Freigabe = das Freigegebene.
+    const gruppen = art==='roh'
+      ? [['zur-pruefung','Eingelaufen — warten auf Freigabe']]
+      : [['bereit-zum-posten','Freigegeben — im Contentplan'],['gepostet','Gepostet']];
+    const passt=(x,g)=>x.phase===g;
+    b.innerHTML=gruppen.map(([g,t])=>{const xs=ks.filter(x=>passt(x,g));
+      return xs.length?`<div class="sec"><h2>${t} <span class="pill">${xs.length}</span></h2>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${xs.map(x=>`
+        <div class="card">
+          ${x.bild?`<img onerror="bildFehlt(this)" src="${x.bild}" style="width:100%;border-radius:8px;display:block;margin-bottom:8px">`:'<div class="meta" style="font-size:12px;margin-bottom:8px">noch keine Seiten</div>'}
+          <b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
+          <span class="meta" style="font-size:11px">${esc(KAR_ART[x.art]||x.art)}${x.slides?` · ${x.slides} Seiten`:''}${x.material?` · ${x.material} Material`:''}</span>
+          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto;margin-top:6px">${esc(x.notizen.slice(0,200))}</div>`:''}
+          <div class="row" style="gap:6px;margin-top:8px">
+            <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.name)}'})">Öffnen</button>
+            ${g==='zur-pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="ksFreigeben('${esc(x.name)}')">Freigeben</button>`:''}
+            ${g==='bereit-zum-posten'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>`:''}
+          </div></div>`).join('')}</div></div>`:''}).join('')
+      || `<p class="meta">${art==='roh'
+            ? 'Nichts Offenes — alles ist freigegeben. <a class="netz" style="cursor:pointer" onclick="nav(\'karFrei\')">zur Freigabe →</a>'
+            : 'Noch nichts freigegeben. <a class="netz" style="cursor:pointer" onclick="nav(\'karRoh\')">zum Rohmaterial →</a>'}</p>`});
+  return '';
+}
+// Eigene Seite fuer Karussells (Anne 17.09.): erst prueft jemand, dann steht es im Contentplan
+const KAR_ART={fertig:'fertige Seiten',material:'Rohmaterial — Nico baut die Seiten',anweisung:'nur Anweisungen'};
+function vKarussells(m){
+  m.innerHTML='<h1>Karussells</h1><div id="ksBox">lädt …</div>';
+  api('/api/karussells').then(d=>{const b=$('#ksBox');if(!b)return;
+    const ks=d.karussells||[];
+    const gruppen=[['zur-pruefung','Zur Prüfung'],['bereit-zum-posten','Freigegeben — im Contentplan'],['gepostet','Gepostet']];
+    b.innerHTML=gruppen.map(([ph,titel])=>{const xs=ks.filter(x=>x.phase===ph);
+      return xs.length?`<div class="sec"><h2>${titel} <span class="pill">${xs.length}</span></h2>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${xs.map(x=>`
+        <div class="card">
+          ${x.bild?`<img onerror="bildFehlt(this)" src="${x.bild}" style="width:100%;border-radius:8px;display:block;margin-bottom:8px">`:'<div class="meta" style="font-size:12px;margin-bottom:8px">noch keine Seiten</div>'}
+          <b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
+          <span class="meta" style="font-size:11px">${esc(KAR_ART[x.art]||x.art)} · ${x.slides} Seiten${x.material?` · ${x.material} Material`:''}</span>
+          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto;margin-top:6px">${esc(x.notizen.slice(0,200))}</div>`:''}
+          <div class="row" style="gap:6px;margin-top:8px">
+            <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.name)}'})">Öffnen</button>
+            ${ph==='zur-pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="ksFreigeben('${esc(x.name)}')">Freigeben</button>`:''}
+            ${ph==='bereit-zum-posten'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>`:''}
+          </div></div>`).join('')}</div></div>`:''}).join('')||'<p class="meta">Noch keine Karussells.</p>'});
+  return '';
+}
+function ksFreigeben(name){
+  // Nach dem Freigeben auf DERSELBEN Seite bleiben (vorher sprang die Ansicht auf eine alte Sammelseite).
+  tun('/api/karussell/'+encodeURIComponent(name),{freigeben:true},'✓ Freigegeben — steht jetzt im Contentplan')
+    .then(r=>{if(!r)return;MATERIAL=null;materialFrisch(true);render()})}
+
+function vKarussell(m){
+  m.innerHTML='<h1>'+esc(cur.name||'')+'</h1><div id="kaBox">lädt …</div>';
+  api('/api/karussell/'+encodeURIComponent(cur.name)).then(d=>{const b=$('#kaBox');if(!b)return;
+    if(d.error){b.innerHTML='<p class="meta">'+esc(d.error)+'</p>';return}
+    KA={name:d.name,reihenfolge:(d.slides||[]).map(x=>x.name)};
+    b.innerHTML=`<div class="row" style="gap:8px;margin-bottom:14px"><span class="pill ${d.phase==='bereit-zum-posten'?'freigegeben':''}">${esc(d.phase)}</span>
+      <span class="meta">${(d.slides||[]).length} Slides</span></div>
+    <div class="grid" id="kaSlides" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">${(d.slides||[]).map((x,i)=>`
+      <div class="card" draggable="true" data-n="${esc(x.name)}" ondragstart="kaZieht(event,'${esc(x.name)}')" ondragover="event.preventDefault()" ondrop="kaDrop(event,'${esc(x.name)}')" style="padding:8px;cursor:grab">
+        <img onerror="bildFehlt(this)" src="${x.url}" style="width:100%;border-radius:8px;display:block">
+        <div class="row" style="justify-content:space-between;margin-top:6px"><span class="meta">${i+1}</span>
+        <button class="btn ghost" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();kaLoeschen('${esc(x.name)}')">entfernen</button></div>
+      </div>`).join('')}</div>
+    <div class="sec"><h2>Caption</h2><textarea id="kaCaption" style="min-height:160px">${esc(d.caption||'')}</textarea>
+    <div class="row" style="margin-top:10px"><button class="btn" onclick="kaSpeichern()">Caption speichern</button>
+    ${d.phase==='zur-pruefung'?'<button class="btn ghost" onclick="kaFreigeben()">Freigeben</button>':''}
+    <button class="btn ghost" onclick="nav('plan')">Zum Contentplan →</button></div></div>`});
+  return '';
+}
+let KA={name:'',reihenfolge:[]}, KAZIEHT=null;
+function kaZieht(ev,n){KAZIEHT=n}
+function kaDrop(ev,ziel){ev.preventDefault();if(!KAZIEHT||KAZIEHT===ziel)return;
+  const r=KA.reihenfolge.filter(x=>x!==KAZIEHT), i=r.indexOf(ziel);
+  r.splice(i<0?r.length:i,0,KAZIEHT); KAZIEHT=null;
+  tun('/api/karussell/'+encodeURIComponent(KA.name),{reihenfolge:r},'Reihenfolge gespeichert').then(()=>render())}
+function kaLoeschen(n){if(!confirm('Slide entfernen?'))return;
+  tun('/api/karussell/'+encodeURIComponent(KA.name),{loeschen:n},'Slide entfernt').then(()=>render())}
+function kaSpeichern(){tun('/api/karussell/'+encodeURIComponent(KA.name),{caption:document.getElementById('kaCaption').value},'✓ Caption gespeichert')}
+function kaFreigeben(){tun('/api/karussell/'+encodeURIComponent(KA.name),{freigeben:true},'✓ Freigegeben — steht jetzt im Contentplan').then(r=>{if(!r)return;MATERIAL=null;render()})}
+// ===== Contentplan: Kalender, Material, Postingplan, Redaktionsplan =====
+// Material, das nicht auf Instagram gehoert (z. B. ein Clip fuer den Circle), aus der Auswahl nehmen.
+// Die Datei bleibt liegen — nur die Anzeige verschwindet, damit nichts unwiederbringlich weg ist.
+async function matAussortieren(id, titel){
+  if(!confirm('„'+titel+'" aus der Auswahl nehmen?\n\nDie Datei bleibt erhalten, sie wird nur nicht mehr zum Einplanen angeboten.'))return;
+  const m=document.getElementById('matModal'); if(m)m.remove();
+  const r=await post('/api/material-aussortieren',{id});
+  if(r&&r.ok){ MATERIAL=(MATERIAL||[]).filter(x=>x.id!==id); toast('Aus der Auswahl genommen'); if(view==='plan')render(); }
+  else toast('Fehler: '+((r&&r.error)||'unbekannt'));
+}
 // --- Redaktionsplan im Tool (Anne 15.09.: kein Asana; Contentplan wird hier gebaut)
 const RP_FORMATE=['Reel','Story','Karussell','B-Roll','Live'], RP_STATUS=['geplant','in Arbeit','freigegeben','gepostet'];
 function rpZeile(e,i){const sel=(name,list,val)=>`<select data-k="${name}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px">${list.map(o=>`<option ${o===val?'selected':''}>${o}</option>`).join('')}</select>`;
@@ -2244,7 +2291,6 @@ async function planEinplanen(datum, zeit, matId){
   d.onclick=(e)=>{if(e.target===d)planModalZu()};
   document.body.appendChild(d);
 }
-function reelTechnik(){const e=document.getElementById('reelTechnik');if(e)e.hidden=!e.hidden}
 function planModalZu(){const d=document.getElementById('planModal');if(d)d.remove()}
 function rpEntfernen(datum,material){
   if(!confirm('Diesen Eintrag aus dem Plan nehmen?'))return;
@@ -2309,36 +2355,6 @@ function rpAendernOk(datum, material){
   document.getElementById('rpModal').remove();
   const plan=(S.redaktionsplan||[]).map(x=>(x.datum===datum&&(x.material||'')===material)?{...x,datum:t,uhrzeit:z}:x);
   tun('/api/redaktionsplan',{plan},'Verschoben auf '+t+' '+z).then(()=>load());
-}
-// Story doch noch schneiden lassen (Anne 17.09.: „ich habe die Moeglichkeit, es zurueck an Nico zu geben")
-function storyZurueck(name){
-  const grund=prompt('Was soll Nico an „'+name+'" noch machen?','');
-  if(grund===null)return;
-  job(['story-zurueck',name,'--grund',grund],'Zurück an Nico: '+name);
-}
-// Nico schreibt einen Änderungswunsch unter das Reel, Claude setzt ihn um (Anne 17.09.)
-async function anweisungSenden(dir){
-  const t=document.getElementById('anwText'), st=document.getElementById('anwStatus');
-  const text=(t.value||'').trim(); if(!text)return toast('Bitte die Änderung beschreiben');
-  st.textContent='geht an den Rechner …';
-  const r=await post('/api/anweisung',{reel:dir,text,von:uplAbsender()||'Team'});
-  if(r.error){st.textContent=r.error;return}
-  t.value=''; st.textContent='läuft — das Reel wird neu gebaut';
-  anweisungenLaden(dir);
-  if(r.job){const p=setInterval(async()=>{const j=await api('/api/job/'+r.job);
-    if(j.status&&j.status!=='läuft'){clearInterval(p);st.textContent='fertig';anweisungenLaden(dir);auftragOeffnen(r.job)}},3000)}
-}
-async function anweisungenLaden(dir){
-  const box=document.getElementById('anwListe'); if(!box)return;
-  const d=await api('/api/anweisungen/'+encodeURIComponent(dir));
-  const l=(d.anweisungen||[]).slice().reverse();
-  box.innerHTML=l.length?l.map(a=>`<div class="aufz" style="cursor:default">
-      <span class="dot ${a.status==='erledigt'?'fertig':a.status==='fehler'?'fehler':'laeuft'}"></span>
-      <div style="min-width:0;flex:1"><b>${esc(a.text)}</b>
-      <span class="meta" style="font-size:11px">${esc(a.von||'')} · ${esc(String(a.zeit||'').replace('T',' '))} · ${esc(a.status||'')}</span>
-      ${a.ergebnis?`<div class="erg">${esc(a.ergebnis)}</div>`:''}
-      ${a.von_hand?`<div class="erg" style="color:var(--red)">von Hand: ${esc(a.von_hand)}</div>`:''}</div></div>`).join('')
-    :'<p class="meta" style="margin:0">Noch keine Anweisung.</p>';
 }
 // Ein eingeplanter Beitrag: ansehen, verschieben, absagen (Anne 17.09.)
 const SLOTS=['08:00','11:30','14:00','17:00','20:00'];
@@ -2477,6 +2493,7 @@ function vPlan(){
   <div class="sec"><h2>Material zum Einplanen</h2><div id="matBox">lädt …</div></div>
   <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>`;
 }
+// ===== KPI und Lernen =====
 async function vKpi(m){
   // Anne 14.09.: dienstags KPI-Meeting = App öffnen -> KPI -> alles da.
   m.innerHTML='<h1>KPI</h1><p class="meta">lädt …</p>';
@@ -2554,20 +2571,10 @@ function vLernen(){
   <table><tr><th>Reel</th><th>Format</th><th>Prognose</th><th>Plays</th><th>Likes</th><th>Komm.</th><th>Status</th></tr>${reels.map(r=>`<tr><td><b>${esc(r.titel)}</b><br><small class="hint">${esc(r.session)}</small></td><td>${esc(r.typ||'')}</td><td>${r.viral.score}</td><td>${r.kpi?.plays??'–'}</td><td>${r.kpi?.likes??'–'}</td><td>${r.kpi?.kommentare??'–'}</td><td><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span></td></tr>`).join('')||'<tr><td colspan=7 class="sub">noch keine bewerteten Reels</td></tr>'}</table>
   <div class="sec"><h2>Playbook — reel-learnings.md</h2><textarea id="learn">${esc(S.learnings||'# Reel-Learnings\n\n(noch leer — der Analyst schreibt hier mit Belegzahlen, was trägt und was nicht)\n')}</textarea><div class="row" style="margin-top:8px"><button class="btn ghost" onclick="tun('/api/learnings',{text:$('#learn').value},'✓ Gespeichert')">Speichern</button></div></div>`;
 }
+// ===== Start: was beim Laden der Seite ausgefuehrt wird (steht immer am Ende) =====
+document.querySelectorAll('nav button[data-v]').forEach(b=>b.onclick=()=>nav(b.dataset.v));
+try{const st=JSON.parse(localStorage.getItem('navZu')||'{}');Object.entries(st).forEach(([g,zu])=>{if(zu)navGruppe(g,false)})}catch{}
 fetch('/api/state').then(r=>r.json()).then(s=>{S=s;render()});
-// Anne 17.09.: „kann man das in den Hintergrund verlagern, ohne dass ich es so sehr spüre?"
-// -> Im verborgenen Tab gar nicht abfragen; passiert lange nichts, wird der Takt gestreckt
-//    (20 s -> bis 2 Min.); sobald sich etwas regt oder du zurueckkommst, wieder eng.
-let takt=20000, stiller=0;
-function taktLauf(){
-  if(document.hidden){setTimeout(taktLauf,takt);return}
-  const vorher=S?JSON.stringify(S):null;
-  load().then(()=>{
-    const jetzt=S?JSON.stringify(S):null;
-    if(vorher===jetzt){stiller++; if(stiller>=3)takt=Math.min(120000,takt+20000)}
-    else {stiller=0; takt=20000}
-  }).catch(()=>{}).finally(()=>setTimeout(taktLauf,takt));
-}
 setTimeout(taktLauf,20000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){takt=20000;stiller=0;load()}});
 </script>
