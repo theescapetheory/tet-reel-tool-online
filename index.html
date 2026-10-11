@@ -1225,6 +1225,7 @@ async function load(){
   const neu = await api('/api/state');
   if(!neu||neu.error||!neu.sessions){ if(!S) $('#main').innerHTML='<p class="sub" style="color:var(--red)">'+esc((neu&&neu.error)||'Der Stand ließ sich nicht laden.')+' Die Seite versucht es gleich noch einmal.</p>'; return; }
   S = neu;
+  if(S.probe&&!document.getElementById('probeBand')){const b=document.createElement('div');b.id='probeBand';b.textContent='PROBE-STUDIO — Testdaten, nichts geht nach außen';b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99;background:#c2410c;color:#fff;text-align:center;font-size:12px;font-weight:700;padding:3px';document.body.appendChild(b)}
   auftragKnopfStand();
   if(window.HOSTED){api('/api/online').then(o=>{const e=$('#onlineStand');if(!e)return;e.hidden=false;
     // Ist der Rechner da, ist alles live. Ist er weg, sieht man den letzten Stand — und das steht dann auch da.
@@ -1270,22 +1271,40 @@ async function uploadFrei(inp){const f=inp.files[0];if(!f)return;
 // `opts.url`/`opts.body`: manche Auftraege haben einen eigenen Endpunkt (z. B. Story-Anweisungen,
 // die erst den Ordner aufloesen muessen) — die Verfolgung des Auftrags ist danach dieselbe.
 async function job(args,label,opts){
-  toast((label||args.join(' '))+(window.HOSTED?' … geht an den Rechner':' … läuft'));
-  const {id,job:jid,error}=opts&&opts.url ? await post(opts.url,opts.body||{}) : await post('/api/job',{args});
-  if(error)return toast(error);
-  const auftrag=id||jid;
-  const box=$('#joblog');
+  const name=label||args.join(' ');
+  // 11.10.2026: Nach dem Klick stand vier Sekunden ein Hinweis da, dann nichts mehr — bis irgendwann ein Fenster
+  // aufging (Anne: „es passiert nichts"). Jetzt bleibt unten sichtbar stehen, DASS etwas laeuft und wie lange
+  // schon, und das Ergebnis oeffnet sich in dem Moment, in dem der Rechner fertig ist.
+  laufAnzeige(name,'wird gestartet …');
+  const r=opts&&opts.url ? await post(opts.url,opts.body||{}) : await post('/api/job',{args});
+  if(!r||r.error){laufAnzeige(null);return toast('Nicht gestartet: '+((r&&r.error)||'keine Antwort'),10000)}
+  const auftrag=r.id||r.job;
+  if(!auftrag){laufAnzeige(null);return toast('Nicht gestartet: Der Rechner hat keinen Auftrag zurückgemeldet.',10000)}
+  const box=$('#joblog'), t0=Date.now(); let fehler=0;
   const t=setInterval(async()=>{
     const j=await api('/api/job/'+auftrag);
-    if(box){box.textContent=(j.log||'').slice(-6000);box.scrollTop=1e9}
-    if(j.status!=='läuft'){
-      clearInterval(t);
-      await load();
-      // Anne 17.09.: nicht nur „fertig" — das Ergebnis muss sichtbar sein und anklickbar bleiben
-      if(!document.getElementById('aufDetail')) auftragOeffnen(auftrag);
-      else toast((label||args[0])+': '+j.status,6000);
+    if(!j||j.error){ if(++fehler<8){laufAnzeige(name,'läuft · warte auf Rückmeldung vom Rechner');return} }
+    else fehler=0;
+    const sek=Math.round((Date.now()-t0)/1000);
+    if(j&&!j.error){
+      if(box){box.textContent=(j.log||'').slice(-6000);box.scrollTop=1e9}
+      const letzte=String(j.log||'').trim().split('\n').filter(z=>z.trim()).pop()||'';
+      if(j.status==='läuft'||j.status==='wartet'){laufAnzeige(name,(j.status==='wartet'?'wartet, bis der Rechner frei ist':'läuft')+' · '+(sek<90?sek+' s':Math.round(sek/60)+' Min')+(letzte?' · '+letzte.slice(0,70):''));return}
     }
+    clearInterval(t); laufAnzeige(null);
+    // Anne 17.09.: nicht nur „fertig" — das Ergebnis muss sichtbar sein und anklickbar bleiben. ERST zeigen, dann neu laden.
+    if(!document.getElementById('aufDetail')) auftragOeffnen(auftrag);
+    else toast(name+': '+((j&&j.status)||'beendet'),6000);
+    load();
   },1500)}
+function laufAnzeige(name,text){
+  let e=document.getElementById('laufAnzeige');
+  if(!name){if(e)e.remove();return}
+  if(!e){e=document.createElement('div');e.id='laufAnzeige';
+    e.style.cssText='position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:60;background:var(--ink,#16233b);color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);max-width:min(720px,92vw)';
+    document.body.appendChild(e)}
+  e.textContent='⏳ '+name+' — '+text;
+}
 async function claude(stage,params,label){
   toast(label+' — Claude arbeitet … (kann einige Minuten dauern)',8000);
   const out=$('#claudeout');if(out)out.textContent='… Claude arbeitet';
@@ -1955,8 +1974,8 @@ function vSession(){
     ${s.reels.length?`<table><tr><th>Reel</th><th>Status</th><th>Viral</th><th>QA</th><th>Sicht</th><th></th></tr>${s.reels.map(r=>`<tr><td>${r.status!=='angelegt'?`<video src="/files/${encodeURIComponent(s.id)}/reels/${encodeURIComponent(r.slug)}/render/reel.mp4" preload="metadata" controls style="width:90px;border-radius:8px;float:left;margin-right:10px"></video>`:''}<b>${esc(r.titel)}</b><br><small class="hint">${esc(r.slug)} · ${esc(r.typ||'')} · ${r.dauer_s?Math.round(r.dauer_s)+' s':''} · CTA ${esc(r.cta||'')} · ${r.status==='angelegt'?'in Arbeit':'Vorschnitt fertig'}</small></td><td><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span></td><td>${r.viral?r.viral.score+' / '+r.viral.schwelle:'–'}</td><td>${r.qa===true?'✓':r.qa===false?'✗':'–'}</td><td>${esc(r.sicht||'–')}</td><td><button class="btn ghost" onclick="nav('reel',{session:'${esc(s.id)}',slug:'${esc(r.slug)}'})">öffnen</button></td></tr>`).join('')}</table>`:''}
     <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre><div id="claudeout" class="sub" style="margin-top:10px;white-space:pre-wrap"></div></div></div></div>`;
 }
-const WORKP=(id)=>'~/tet-reel-work/'.replace('~',HOME)+id;
-let HOME='';
+// Der Datenordner kommt vom Rechner (S.work) — die Seite raet ihn nicht mehr (11.10.2026: im Probe-Studio liefen sonst alle Knoepfe ins echte Studio).
+const WORKP=(id)=>(S&&S.work||'')+'/'+id;
 async function vReel(m){
   const s=S.sessions.find(x=>x.id===cur.session); const r0=s&&s.reels.find(x=>x.slug===cur.slug);
   if(!r0){nav('vorschnitt');return}
@@ -2024,9 +2043,15 @@ function initSchnitt(d){
   if(d.reel.quelle&&d.reel.quelle.typ==='zoom-split'){el.innerHTML='';return}
   ED={segs:JSON.parse(JSON.stringify(d.reel.redaktion.segmente)), orig:JSON.parse(JSON.stringify(d.reel.redaktion.segmente)),
       off:(d.quelle&&d.quelle.offset_s)||0, proxy:d.quelle&&d.quelle.proxy, reel:d.reel, sel:0, pps:10, srcDur:null, dirty:false};
+  // 11.10.2026: Die Vorschau der AUFNAHME gab es nur bei 11 von 186 Reels (sie wird nach dem Bau aufgeraeumt) —
+  // ohne sie ging „Am Playhead teilen" nicht. Fehlt sie, spielt der Editor den gebauten Vorschnitt und rechnet
+  // dessen Zeit auf die Aufnahme um (ED.modus 'reel').
+  const gebaut=d.gerendert?(d.videoKlein||('/files/'+encodeURIComponent(cur.session)+'/reels/'+encodeURIComponent(cur.slug)+'/render/reel.mp4')):null;
+  ED.modus=ED.proxy?'quelle':'reel'; ED.vsrc=ED.proxy||gebaut; ED.gebaut=JSON.parse(JSON.stringify(ED.orig));
   el.innerHTML=''
-   +(ED.proxy?'<video id="edv" src="'+ED.proxy+'" preload="metadata" style="max-width:240px;border-radius:12px;background:#000" controls muted></video>'
-             :'')
+   +(ED.vsrc?'<video id="edv" src="'+ED.vsrc+'" preload="metadata" style="max-width:240px;border-radius:12px;background:#000" controls muted></video>'
+             +(ED.modus==='reel'?'<div class="meta" style="margin-top:4px">Vorschau: der gebaute Vorschnitt. Spule an die Stelle, an der geteilt werden soll.</div>':'')
+             :'<div class="meta">Noch kein Video gebaut — teilen geht nach dem ersten Bau.</div>')
    +'<div class="row" style="margin:10px 0">'
    +'<button class="btn ghost" onclick="edSplit()">✂︎ Am Playhead teilen</button>'
    +'<button class="btn ghost" onclick="edDel()">🗑 Clip löschen</button>'
@@ -2036,7 +2061,7 @@ function initSchnitt(d){
    +'<div id="edlane" style="position:relative;height:56px;background:rgba(13,21,38,.05);border-radius:10px;overflow-x:auto;overflow-y:hidden"></div>'
    +'<div class="meta" id="edinfo" style="margin-top:8px">Clip anklicken · Kanten ziehen = trimmen/verlängern (die Vorschau springt auf das Bild der neuen Grenze)</div>';
   const v=document.getElementById('edv');
-  if(v) v.addEventListener('loadedmetadata',()=>{ED.srcDur=v.duration; edRender()});
+  if(v) v.addEventListener('loadedmetadata',()=>{ED.vDur=v.duration; if(ED.modus==='quelle')ED.srcDur=v.duration; edRender()});
   edRender();
 }
 function edTotal(){return ED.segs.reduce((a,s)=>a+(s.end-s.start),0)}
@@ -2062,7 +2087,16 @@ function edRender(){
   if(sum) sum.textContent='Gesamt '+edTotal().toFixed(1)+' s · '+ED.segs.length+' Clips'+(ED.dirty?' · ungespeichert':'');
   const sv=document.getElementById('edsave'); if(sv) sv.disabled=!ED.dirty;
 }
-function edSeek(t){const v=document.getElementById('edv'); if(v&&ED.srcDur!=null){v.currentTime=Math.max(0,Math.min(ED.srcDur-0.05,t-ED.off))}}
+// Zeit im Vorschau-Video <-> Zeit in der Aufnahme. Im Modus 'reel' ueber die Clips, so wie sie gebaut wurden (ED.gebaut).
+function edQuellzeit(tv){
+  if(ED.modus==='quelle') return tv+ED.off;
+  let cum=0; for(const s of ED.gebaut){const l=s.end-s.start; if(tv<=cum+l) return s.start+(tv-cum); cum+=l}
+  const z=ED.gebaut[ED.gebaut.length-1]; return z?z.end:tv}
+function edVideozeit(t){
+  if(ED.modus==='quelle') return t-ED.off;
+  let cum=0; for(const s of ED.gebaut){ if(t<s.start) return cum; if(t<=s.end) return cum+(t-s.start); cum+=s.end-s.start }
+  return cum}
+function edSeek(t){const v=document.getElementById('edv'); if(v&&ED.vDur!=null){v.currentTime=Math.max(0,Math.min(ED.vDur-0.05,edVideozeit(t)))}}
 function edDown(ev,i){
   ev.preventDefault(); ED.sel=i;
   const clip=ev.currentTarget, rect=clip.getBoundingClientRect();
@@ -2083,9 +2117,9 @@ function edDown(ev,i){
   window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
 }
 function edSplit(){
-  const v=document.getElementById('edv'); if(!v){toast('Ohne Quell-Proxy kein Teilen');return}
-  const t=v.currentTime+ED.off, i=ED.segs.findIndex(s=>t>s.start+0.3&&t<s.end-0.3);
-  if(i<0){toast('Playhead steht in keinem Clip (Vorschau auf die Stelle spulen, an der geteilt werden soll)');return}
+  const v=document.getElementById('edv'); if(!v){toast('Teilen geht erst, wenn das Reel einmal gebaut ist.',7000);return}
+  const t=edQuellzeit(v.currentTime), i=ED.segs.findIndex(s=>t>s.start+0.3&&t<s.end-0.3);
+  if(i<0){toast('An dieser Stelle lässt sich nicht teilen (zu nah am Rand eines Clips). Vorschau auf die Stelle spulen, an der geteilt werden soll.',7000);return}
   const s=ED.segs[i], cut=Math.round(t*100)/100;
   ED.segs.splice(i,1,{...s,end:cut},{...s,start:cut,text:(s.text||'')+' (Teil 2)'});
   ED.sel=i+1; ED.dirty=true; edRender(); toast('Geteilt bei Quelle '+(cut-ED.off).toFixed(2)+' s');
@@ -2099,7 +2133,7 @@ async function edSave(){
   const reel=ED.reel; reel.redaktion.segmente=ED.segs;
   if(!await tun('/api/reel/'+encodeURIComponent(cur.session)+'/'+encodeURIComponent(cur.slug),{reel})) return;
   ED.orig=JSON.parse(JSON.stringify(ED.segs)); ED.dirty=false; edRender();
-  toast('✓ Schnitt gespeichert. Damit es im Video steht: oben „Technik …“ öffnen und „Neu bauen“ drücken.',9000);
+  toast('✓ Schnitt gespeichert. Damit es im Video steht: oben „Neu bauen“ drücken.',9000);
 }
 
 
@@ -2140,7 +2174,7 @@ async function capSave(){
   reel.captions=reel.captions||{};
   reel.captions.korrekturen={cut_sig:CAP.cutSig, gruppen:Object.values(CAP.edits)};
   if(!await tun('/api/reel/'+encodeURIComponent(cur.session)+'/'+encodeURIComponent(cur.slug),{reel})) return;
-  toast('✓ '+Object.keys(CAP.edits).length+' Untertitel-Korrektur(en) gespeichert. Damit es im Video steht: oben „Technik …“ öffnen und „Neu bauen“ drücken.',9000);
+  toast('✓ '+Object.keys(CAP.edits).length+' Untertitel-Korrektur(en) gespeichert. Damit es im Video steht: oben „Neu bauen“ drücken.',9000);
   document.getElementById('capsave').disabled=true;
 }
 
@@ -2515,7 +2549,7 @@ function vLernen(){
   <table><tr><th>Reel</th><th>Format</th><th>Prognose</th><th>Plays</th><th>Likes</th><th>Komm.</th><th>Status</th></tr>${reels.map(r=>`<tr><td><b>${esc(r.titel)}</b><br><small class="hint">${esc(r.session)}</small></td><td>${esc(r.typ||'')}</td><td>${r.viral.score}</td><td>${r.kpi?.plays??'–'}</td><td>${r.kpi?.likes??'–'}</td><td>${r.kpi?.kommentare??'–'}</td><td><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span></td></tr>`).join('')||'<tr><td colspan=7 class="sub">noch keine bewerteten Reels</td></tr>'}</table>
   <div class="sec"><h2>Playbook — reel-learnings.md</h2><textarea id="learn">${esc(S.learnings||'# Reel-Learnings\n\n(noch leer — der Analyst schreibt hier mit Belegzahlen, was trägt und was nicht)\n')}</textarea><div class="row" style="margin-top:8px"><button class="btn ghost" onclick="tun('/api/learnings',{text:$('#learn').value},'✓ Gespeichert')">Speichern</button></div></div>`;
 }
-fetch('/api/state').then(r=>r.json()).then(s=>{S=s;HOME=(s.sessions[0]?.pfad||'').includes('/Users/')?'/Users/'+(s.sessions[0].pfad.split('/')[2]):'';render()});
+fetch('/api/state').then(r=>r.json()).then(s=>{S=s;render()});
 // Anne 17.09.: „kann man das in den Hintergrund verlagern, ohne dass ich es so sehr spüre?"
 // -> Im verborgenen Tab gar nicht abfragen; passiert lange nichts, wird der Takt gestreckt
 //    (20 s -> bis 2 Min.); sobald sich etwas regt oder du zurueckkommst, wieder eng.
