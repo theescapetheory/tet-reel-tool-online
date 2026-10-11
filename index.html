@@ -1078,7 +1078,8 @@ tr:last-child td{ border-bottom:0; }
 <script>
 const $=(s,r=document)=>r.querySelector(s);
 // Datum als JJJJ-MM-TT — wird im Contentplan UND im Einplanen-Fenster gebraucht, muss global sein
-const fmt=(d)=>d.toISOString().slice(0,10);
+// Ortszeit, nicht Weltzeit: zwischen 0 und 2 Uhr nachts ergab toISOString() den Vortag (11.10.2026).
+const fmt=(d)=>{const p=(n)=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())};
 const esc=(s)=>String(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LADDER=['neu','ingest','transkript','kandidaten','reels','gerendert','qa','viral-ok','freigegeben','bereit','auftrag','geplant','gepostet','kpi'];
 const LABEL={neu:'neu',ingest:'eingelesen',transkript:'Transkript',kandidaten:'Kandidaten',reels:'Reels in Arbeit',angelegt:'angelegt',gerendert:'gerendert',qa:'QA PASS',nachbessern:'nachbessern','viral-ok':'Viral ≥ Schwelle',freigegeben:'freigegeben',bereit:'bereit zum Posten',auftrag:'Einplan-Auftrag (wartet auf Claude-Routine)',geplant:'in Metricool geplant',gepostet:'gepostet',kpi:'KPI ausgewertet'};
@@ -1102,17 +1103,51 @@ function abmeldungZeigen(){
     +'background:#101a2e;color:#fff;cursor:pointer" onclick="location.reload()">Neu laden</button></div>';
   document.body.appendChild(d);
 }
+// ---------- Anfragen an den Server (Kreis grundlage) ----------
+// Online ist die Seite eine Fernbedienung fuer den Rechner im Studio: Jede Anfrage geht zu ihm und kommt mit
+// seiner echten Antwort zurueck. `api()` liefert deshalb IMMER ein Objekt; ist etwas schiefgegangen, steht der
+// Grund als Satz in `.error`. Kein Knopf darf „erledigt" melden, ohne `.error` geprueft zu haben — dafuer `tun()`.
 const api=async(p,o)=>{
-  const r=await fetch(p,o);
+  let r;
+  try{r=await fetch(p,o)}
+  catch(e){return {error:'Keine Verbindung zum Server. Bitte Internet prüfen und noch einmal versuchen.',netz:true}}
   if(r.status===401){abmeldungZeigen();throw new Error('nicht angemeldet')}
-  const t=await r.text();
-  try{return JSON.parse(t)}
+  const t=await r.text(); let d;
+  try{d=JSON.parse(t)}
   catch(e){
     if(/^\s*</.test(t)||/login/i.test(t.slice(0,40))){abmeldungZeigen();throw new Error('nicht angemeldet')}
-    throw e;
+    d={error:(t||'').trim().slice(0,300)||('Der Server hat mit Fehler '+r.status+' geantwortet.')};
   }
+  if(d&&typeof d==='object'&&!Array.isArray(d)){
+    if(r.status===202&&d.queued) return aktionAbwarten(d);
+    if(!r.ok&&!d.error&&!d.fehlt) d.error='Das hat nicht geklappt (Fehler '+r.status+').';
+  }
+  return d;
 };
+// Der Rechner hat nicht in 25 Sekunden geantwortet: Arbeitet er noch, wird auf das echte Ergebnis gewartet.
+// Ist er nicht erreichbar, kommt das als Fehler zurueck — die Aktion liegt dann bereit und wird nachgeholt.
+async function aktionAbwarten(d){
+  if(!d.rechner) return {error:d.hinweis||'Der Rechner im Studio ist gerade nicht erreichbar.',offline:true,wartet:d.id};
+  toast('Der Rechner arbeitet noch daran …',8000);
+  for(let i=0;i<300;i++){
+    await new Promise(ok=>setTimeout(ok,2000));
+    const a=await fetch('/api/aktion/'+d.id).then(x=>x.json()).catch(()=>null);
+    if(!a||a.status==='wartet') continue;
+    const e=(a.ergebnis&&typeof a.ergebnis==='object')?a.ergebnis:{};
+    if((a.http||200)>=400&&!e.error) e.error='Das hat nicht geklappt (Fehler '+a.http+').';
+    return e;
+  }
+  return {error:'Der Rechner hat nach zehn Minuten noch nicht geantwortet. Unter „Aufträge" steht, ob es geklappt hat.'};
+}
 const post=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+// EIN Weg fuer jeden Knopf, der etwas aendert: ausfuehren, Ergebnis pruefen, ehrlich melden.
+// Gibt die Antwort zurueck, wenn es geklappt hat — sonst null (die Fehlermeldung steht dann schon da).
+async function tun(pfad,body,erfolg){
+  const r=await post(pfad,body||{});
+  if(!r||r.error){toast('Nicht ausgeführt: '+((r&&r.error)||'keine Antwort'),9000);return null}
+  if(erfolg) toast(erfolg,4000);
+  return r;
+}
 // ---------- Aufträge: was läuft, was fertig ist, mit Ergebnis und vollem Protokoll ----------
 function zeit(iso){if(!iso)return '';const d=new Date(iso);return d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}
 function dauer(a,b){if(!a||!b)return '';const s=Math.round((new Date(b)-new Date(a))/1000);return s<60?s+' s':Math.floor(s/60)+' min '+(s%60)+' s'}
@@ -1187,10 +1222,14 @@ function ladder(st){const i=LADDER.indexOf(st);return '<div class="ladder">'+LAD
 // Aenderung, nie waehrend einer Eingabe oder bei offenem Fenster — und die Scrollhöhe bleibt stehen.
 async function load(){
   const vorher = S ? JSON.stringify(S) : null;
-  S = await api('/api/state');
+  const neu = await api('/api/state');
+  if(!neu||neu.error||!neu.sessions){ if(!S) $('#main').innerHTML='<p class="sub" style="color:var(--red)">'+esc((neu&&neu.error)||'Der Stand ließ sich nicht laden.')+' Die Seite versucht es gleich noch einmal.</p>'; return; }
+  S = neu;
   auftragKnopfStand();
   if(window.HOSTED){api('/api/online').then(o=>{const e=$('#onlineStand');if(!e)return;e.hidden=false;
-    e.textContent=o.stand?('Stand '+o.stand.replace('T',' ').slice(0,16)+(o.offen?' · '+o.offen+' offen':'')):'noch kein Sync'})}
+    // Ist der Rechner da, ist alles live. Ist er weg, sieht man den letzten Stand — und das steht dann auch da.
+    e.style.color=o.rechner?'':'var(--red)';
+    e.textContent=o.rechner?'verbunden':('Rechner nicht erreichbar · Stand '+String(o.stand||'–').replace('T',' ').slice(0,16)+(o.offen?' · '+o.offen+' Aktion(en) warten':''))})}
   if(view==='reel')return;
   if(vorher===JSON.stringify(S))return;                 // nichts Neues -> stehen lassen
   if(document.querySelector('.modal'))return;           // ein Fenster ist offen
@@ -1220,7 +1259,7 @@ function nav(v,extra){view=v;Object.assign(cur,extra||{});
   render()}
 document.querySelectorAll('nav button[data-v]').forEach(b=>b.onclick=()=>nav(b.dataset.v));
 try{const st=JSON.parse(localStorage.getItem('navZu')||'{}');Object.entries(st).forEach(([g,zu])=>{if(zu)navGruppe(g,false)})}catch{}
-async function sessionEntfernen(id){if(!confirm('Diesen Upload aus dem Eingang entfernen? (Datei wird verschoben, nicht gelöscht)'))return;const r=await post('/api/session-entfernen',{id});toast(r.ok?'Entfernt':'Fehler: '+(r.error||''));nav('eingang')}
+async function sessionEntfernen(id){if(!confirm('Diesen Upload aus dem Eingang entfernen? (Datei wird verschoben, nicht gelöscht)'))return;if(await tun('/api/session-entfernen',{id},'Aus dem Eingang entfernt')){await load();nav('eingang')}}
 async function uploadLink(){const d=await api('/api/upload-link');if(!d.link)return toast('Kein Upload-Schlüssel gesetzt');try{await navigator.clipboard.writeText(d.link)}catch{}toast('Upload-Link kopiert: '+d.link,12000)}
 async function uploadFrei(inp){const f=inp.files[0];if(!f)return;toast('Lade fertige Fassung hoch … ('+Math.round(f.size/1e6)+' MB)');
  const r=await fetch('/api/upload-frei?session='+encodeURIComponent(cur.session)+'&slug='+encodeURIComponent(cur.slug),{method:'POST',body:f});const d=await r.json();
@@ -1705,8 +1744,9 @@ function vKarussells(m){
   return '';
 }
 function ksFreigeben(name){
-  post('/api/karussell/'+encodeURIComponent(name),{freigeben:true})
-    .then(()=>{toast('✓ freigegeben — steht im Contentplan');MATERIAL=null;materialFrisch(true);vKarussells($('#main'))})}
+  // Nach dem Freigeben auf DERSELBEN Seite bleiben (vorher sprang die Ansicht auf eine alte Sammelseite).
+  tun('/api/karussell/'+encodeURIComponent(name),{freigeben:true},'✓ Freigegeben — steht jetzt im Contentplan')
+    .then(r=>{if(!r)return;MATERIAL=null;materialFrisch(true);render()})}
 
 // Eigene Seite fuer Storys: Rohmaterial -> untertitelt (zur Pruefung) -> freigegeben
 function vStorys(m){
@@ -1731,9 +1771,8 @@ function vStorys(m){
   return '';
 }
 function stFreigeben(name){
-  post('/api/story-freigeben',{name}).then(r=>{
-    if(r.error)return toast(r.error);
-    toast('✓ freigegeben — steht im Contentplan');MATERIAL=null;materialFrisch(true);vStorys($('#main'))})}
+  tun('/api/story-freigeben',{name},'✓ Freigegeben — steht jetzt im Contentplan')
+    .then(r=>{if(!r)return;MATERIAL=null;materialFrisch(true);render()})}
 // Aenderungswuensche zu einer Story. Anne 17.09.: „Dafuer kannst du mir gerne hier noch ein Tool
 // einbauen, dass ich da einfach einen Regler habe zum Verschieben. Ansonsten wird in den Storys
 // nichts geschnitten." Genau darum kann dieses Fenster nur: trimmen, Untertitel neu, zurueck an Nico.
@@ -1822,11 +1861,11 @@ function kaZieht(ev,n){KAZIEHT=n}
 function kaDrop(ev,ziel){ev.preventDefault();if(!KAZIEHT||KAZIEHT===ziel)return;
   const r=KA.reihenfolge.filter(x=>x!==KAZIEHT), i=r.indexOf(ziel);
   r.splice(i<0?r.length:i,0,KAZIEHT); KAZIEHT=null;
-  post('/api/karussell/'+encodeURIComponent(KA.name),{reihenfolge:r}).then(()=>{toast('Reihenfolge gespeichert');render()})}
+  tun('/api/karussell/'+encodeURIComponent(KA.name),{reihenfolge:r},'Reihenfolge gespeichert').then(()=>render())}
 function kaLoeschen(n){if(!confirm('Slide entfernen?'))return;
-  post('/api/karussell/'+encodeURIComponent(KA.name),{loeschen:n}).then(()=>{toast('entfernt');render()})}
-function kaSpeichern(){post('/api/karussell/'+encodeURIComponent(KA.name),{caption:document.getElementById('kaCaption').value}).then(()=>toast('✓ Caption gespeichert'))}
-function kaFreigeben(){post('/api/karussell/'+encodeURIComponent(KA.name),{freigeben:true}).then(()=>{toast('✓ freigegeben — steht im Contentplan');MATERIAL=null;render()})}
+  tun('/api/karussell/'+encodeURIComponent(KA.name),{loeschen:n},'Slide entfernt').then(()=>render())}
+function kaSpeichern(){tun('/api/karussell/'+encodeURIComponent(KA.name),{caption:document.getElementById('kaCaption').value},'✓ Caption gespeichert')}
+function kaFreigeben(){tun('/api/karussell/'+encodeURIComponent(KA.name),{freigeben:true},'✓ Freigegeben — steht jetzt im Contentplan').then(r=>{if(!r)return;MATERIAL=null;render()})}
 
 function vStoryRoh(m){
   m.innerHTML='<h1>'+esc(cur.name||'')+'</h1><div id="srBox">lädt …</div>';
@@ -1938,7 +1977,8 @@ async function vReel(m){
   initSchnitt(d);
   initCaptions(d);
 }
-async function saveReel(){try{const reel=JSON.parse($('#reeljson').value);await post(`/api/reel/${encodeURIComponent(cur.session)}/${encodeURIComponent(cur.slug)}`,{reel});toast('reel.json gespeichert')}catch(e){toast('JSON-Fehler: '+e.message)}}
+async function saveReel(){let reel;try{reel=JSON.parse($('#reeljson').value)}catch(e){return toast('Der Text ist kein gültiges JSON: '+e.message,9000)}
+  await tun(`/api/reel/${encodeURIComponent(cur.session)}/${encodeURIComponent(cur.slug)}`,{reel},'✓ Gespeichert')}
 
 /* ================= Schnitt-Editor · Etappe 1 (28.08.) =================
    Clips = Segmente aus reel.json (Quell-Sekunden). Trimmen/VERLAENGERN an den
@@ -2024,9 +2064,9 @@ function edDel(){
 function edReset(){ED.segs=JSON.parse(JSON.stringify(ED.orig));ED.sel=0;ED.dirty=false;edRender();toast('Zurückgesetzt auf den gespeicherten Stand')}
 async function edSave(){
   const reel=ED.reel; reel.redaktion.segmente=ED.segs;
-  await post('/api/reel/'+encodeURIComponent(cur.session)+'/'+encodeURIComponent(cur.slug),{reel});
+  if(!await tun('/api/reel/'+encodeURIComponent(cur.session)+'/'+encodeURIComponent(cur.slug),{reel})) return;
   ED.orig=JSON.parse(JSON.stringify(ED.segs)); ED.dirty=false; edRender();
-  toast('✓ Gespeichert. Jetzt „Bauen (run)" — die Kette erneuert Schnitt, Ton, Transkript und Captions automatisch.');
+  toast('✓ Schnitt gespeichert. Damit es im Video steht: oben „Technik …“ öffnen und „Neu bauen“ drücken.',9000);
 }
 
 
@@ -2066,8 +2106,8 @@ async function capSave(){
   const reel=CAP.reel;
   reel.captions=reel.captions||{};
   reel.captions.korrekturen={cut_sig:CAP.cutSig, gruppen:Object.values(CAP.edits)};
-  await post('/api/reel/'+encodeURIComponent(cur.session)+'/'+encodeURIComponent(cur.slug),{reel});
-  toast('✓ '+Object.keys(CAP.edits).length+' Caption-Korrektur(en) gespeichert. Jetzt „Bauen (run)" — dann stehen sie im Video.');
+  if(!await tun('/api/reel/'+encodeURIComponent(cur.session)+'/'+encodeURIComponent(cur.slug),{reel})) return;
+  toast('✓ '+Object.keys(CAP.edits).length+' Untertitel-Korrektur(en) gespeichert. Damit es im Video steht: oben „Technik …“ öffnen und „Neu bauen“ drücken.',9000);
   document.getElementById('capsave').disabled=true;
 }
 
@@ -2079,8 +2119,9 @@ function rpZeile(e,i){const sel=(name,list,val)=>`<select data-k="${name}" style
   return `<tr class="rpRow">${e.reel?`<td>`:'<td>'}${inp('datum',e.datum,'120px').replace('<input','<input type="date"')}</td><td>${sel('format',RP_FORMATE,e.format||'Reel')}</td><td>${inp('thema',e.thema)}</td><td>${inp('hook',e.hook)}</td><td>${sel('cta',['222','ANALYSE','–'],e.cta||'222')}</td><td>${sel('status',RP_STATUS,e.status||'geplant')}</td><td style="white-space:nowrap"><select data-k="material" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px;max-width:220px"><option value="">Material …</option>${(MATERIAL||[]).filter(m=>!e.format||m.typ===(e.format||'Reel')||(e.format||'').startsWith(m.typ)).map(m=>`<option value="${esc(m.id)}" ${m.id===e.material?'selected':''}>${esc(m.titel)} (${m.dateien.length})</option>`).join('')}</select> <input data-k="uhrzeit" type="time" value="${esc(e.uhrzeit||'11:30')}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px"> <button class="btn" style="padding:6px 10px" onclick="rpEinplanen(this)">Einplanen</button> <button class="btn ghost" style="padding:4px 8px" onclick="this.closest('tr').remove()">✕</button></td></tr>`}
 function rpZeileNeu(){const t=$('#rpTab');const d=new Date();d.setDate(d.getDate()+1);t.insertAdjacentHTML('beforeend',rpZeile({datum:d.toISOString().slice(0,10)},0))}
 async function rpSpeichern(){const rows=[...document.querySelectorAll('#rpTab tr.rpRow')].map(tr=>{const o={};tr.querySelectorAll('[data-k]').forEach(el=>o[el.dataset.k]=el.value);const alt=(S.redaktionsplan||[]).find(e=>e.datum===o.datum&&e.thema===o.thema);if(alt&&alt.reel)o.reel=alt.reel;return o}).filter(o=>o.datum||o.thema);
-  const r=await fetch('/api/redaktionsplan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan:rows})}).then(r=>r.json());
-  $('#rpStatus').textContent=r.ok?'✓ gespeichert ('+r.n+' Einträge)':'Fehler'; S.redaktionsplan=rows; setTimeout(load,300)}
+  const r=await post('/api/redaktionsplan',{plan:rows});
+  $('#rpStatus').textContent=(r&&r.ok)?'✓ gespeichert ('+r.n+' Einträge)':'Nicht gespeichert: '+((r&&r.error)||'keine Antwort');
+  if(r&&r.ok){S.redaktionsplan=rows; setTimeout(load,300)}}
 let MATERIAL=null, MATERIAL_ZEIT=0;
 // Die Materialliste wurde einmal geladen und dann behalten. Online kommt sie aus dem Schnappschuss,
 // der erst eine Minute spaeter nachzieht — wer direkt nach dem Freigeben in den Contentplan ging,
@@ -2095,7 +2136,7 @@ function ppZeile(e){const inp=(k,v,w)=>`<input data-k="${k}" value="${esc(v||'')
   return `<tr class="ppRow"><td><select data-k="tag" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px">${['Mo','Di','Mi','Do','Fr','Sa','So'].map(t=>`<option ${t===e.tag?'selected':''}>${t}</option>`).join('')}</select></td><td>${inp('wer',e.wer,'110px')}</td><td>${inp('format',e.format,'150px')}</td><td>${inp('thema',e.thema)}</td><td><button class="btn ghost" style="padding:4px 8px" onclick="this.closest('tr').remove()">✕</button></td></tr>`}
 function ppZeileNeu(){$('#ppTab').insertAdjacentHTML('beforeend',ppZeile({tag:'Mo'}))}
 async function ppSpeichern(){const rows=[...document.querySelectorAll('#ppTab tr.ppRow')].map(tr=>{const o={};tr.querySelectorAll('[data-k]').forEach(el=>o[el.dataset.k]=el.value);return o}).filter(o=>o.wer||o.thema);
-  const r=await fetch('/api/postingplan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan:rows})}).then(r=>r.json());$('#ppStatus').textContent=r.ok?'✓ gespeichert':'Fehler';S.postingplan=rows}
+  const r=await post('/api/postingplan',{plan:rows});$('#ppStatus').textContent=(r&&r.ok)?'✓ gespeichert':'Nicht gespeichert: '+((r&&r.error)||'keine Antwort');if(r&&r.ok)S.postingplan=rows}
 async function rpEinplanen(btn){const tr=btn.closest('tr');const g=k=>(tr.querySelector('[data-k='+k+']')||{}).value||'';const mat=g('material'),datum=g('datum'),uhr=g('uhrzeit')||'11:30',thema=g('thema');
   if(!mat||!datum)return toast('Material und Datum wählen');btn.disabled=true;
   await rpSpeichern();
@@ -2136,7 +2177,7 @@ function planModalZu(){const d=document.getElementById('planModal');if(d)d.remov
 function rpEntfernen(datum,material){
   if(!confirm('Diesen Eintrag aus dem Plan nehmen?'))return;
   const plan=(S.redaktionsplan||[]).filter(x=>!(x.datum===datum&&(x.material||'')===material));
-  post('/api/redaktionsplan',{plan}).then(()=>{toast('entfernt');load()})}
+  tun('/api/redaktionsplan',{plan},'Aus dem Plan genommen').then(()=>load())}
 // Material ansehen, bevor es eingeplant wird
 function matAnsehen(id){
   const x=(MATERIAL||[]).find(y=>y.id===id); if(!x)return;
@@ -2195,7 +2236,7 @@ function rpAendernOk(datum, material){
   const t=document.getElementById('raTag').value, z=document.getElementById('raZeit').value;
   document.getElementById('rpModal').remove();
   const plan=(S.redaktionsplan||[]).map(x=>(x.datum===datum&&(x.material||'')===material)?{...x,datum:t,uhrzeit:z}:x);
-  post('/api/redaktionsplan',{plan}).then(()=>{toast('verschoben auf '+t+' '+z);load()});
+  tun('/api/redaktionsplan',{plan},'Verschoben auf '+t+' '+z).then(()=>load());
 }
 // Story doch noch schneiden lassen (Anne 17.09.: „ich habe die Moeglichkeit, es zurueck an Nico zu geben")
 function storyZurueck(name){
@@ -2437,7 +2478,7 @@ function vLernen(){
   return `<h1>Lernen</h1>
   
   <table><tr><th>Reel</th><th>Format</th><th>Prognose</th><th>Plays</th><th>Likes</th><th>Komm.</th><th>Status</th></tr>${reels.map(r=>`<tr><td><b>${esc(r.titel)}</b><br><small class="hint">${esc(r.session)}</small></td><td>${esc(r.typ||'')}</td><td>${r.viral.score}</td><td>${r.kpi?.plays??'–'}</td><td>${r.kpi?.likes??'–'}</td><td>${r.kpi?.kommentare??'–'}</td><td><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span></td></tr>`).join('')||'<tr><td colspan=7 class="sub">noch keine bewerteten Reels</td></tr>'}</table>
-  <div class="sec"><h2>Playbook — reel-learnings.md</h2><textarea id="learn">${esc(S.learnings||'# Reel-Learnings\n\n(noch leer — der Analyst schreibt hier mit Belegzahlen, was trägt und was nicht)\n')}</textarea><div class="row" style="margin-top:8px"><button class="btn ghost" onclick="post('/api/learnings',{text:$('#learn').value}).then(()=>toast('gespeichert'))">Speichern</button></div></div>
+  <div class="sec"><h2>Playbook — reel-learnings.md</h2><textarea id="learn">${esc(S.learnings||'# Reel-Learnings\n\n(noch leer — der Analyst schreibt hier mit Belegzahlen, was trägt und was nicht)\n')}</textarea><div class="row" style="margin-top:8px"><button class="btn ghost" onclick="tun('/api/learnings',{text:$('#learn').value},'✓ Gespeichert')">Speichern</button></div></div>
   <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre><div id="claudeout" class="sub" style="margin-top:10px;white-space:pre-wrap"></div></div>`;
 }
 fetch('/api/state').then(r=>r.json()).then(s=>{S=s;HOME=(s.sessions[0]?.pfad||'').includes('/Users/')?'/Users/'+(s.sessions[0].pfad.split('/')[2]):'';render()});

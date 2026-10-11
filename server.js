@@ -102,8 +102,34 @@ function syncOk(req) { return SECRET && (req.headers.authorization || "") === "B
 
 function queue(type, p, method, body) {
   const a = { id: "a-" + crypto.randomBytes(5).toString("hex"), type, path: p, method, body, ts: new Date().toISOString(), status: "wartet" };
-  actions.push(a); writeJSON(ACT, actions); return a;
+  actions.push(a);
+  if (method !== "GET") writeJSON(ACT, actions);      // Lese-Anfragen muessen keinen Neustart ueberleben
+  for (const wecken of macWartet.splice(0)) wecken();  // der Rechner haengt mit einer offenen Anfrage hier — sofort bedienen
+  return a;
 }
+
+// ---------- Fernbedienung (11.10.2026) ----------
+// Bisher: Jeder Klick online wurde in eine Liste gelegt, die Seite meldete sofort „erledigt", und der
+// Rechner spielte die Aktion Sekunden bis Minuten spaeter nach. Schlug sie dort fehl, erfuhr es niemand;
+// und was die Seite danach las, war der Stand von vor dem Klick. Fuer Anne und Nico hiess das:
+// „Knoepfe funktionieren nicht".
+// Jetzt: Der Rechner haengt dauernd mit einer offenen Anfrage am Dienst (`/sync/actions?warte=…`). Eine
+// Aktion geht in dem Moment zu ihm, in dem sie entsteht, und die Anfrage des Nutzers wartet auf seine
+// ECHTE Antwort — mit Statuscode und Inhalt, als saesse er direkt am Rechner. Lese-Anfragen gehen
+// denselben Weg; der hochgeladene Stand ist nur noch der Rueckfall, wenn der Rechner nicht erreichbar ist.
+const warter = new Map();      // Aktions-id -> Funktion, die die wartende Nutzer-Anfrage beantwortet
+const macWartet = [];          // offene Anfragen des Rechners
+let macZuletzt = 0;
+const macDa = () => macWartet.length > 0 || Date.now() - macZuletzt < 45000;
+function fern(method, p, body, sekunden) {
+  const a = queue("http", p, method, body);
+  return new Promise((ok) => {
+    const t = setTimeout(() => { warter.delete(a.id); ok({ a, zeit: true }); }, sekunden * 1000);
+    warter.set(a.id, (fertig) => { clearTimeout(t); ok({ a: fertig }); });
+  });
+}
+const weg = (a) => { const i = actions.indexOf(a); if (i >= 0) actions.splice(i, 1); };
+const OFFLINE = "Der Rechner im Studio ist gerade nicht erreichbar.";
 // sofort sichtbare Aenderungen (Plaene) im Spiegel mitziehen, bis der Rechner den echten Stand liefert
 function optimistic(p, body) {
   snapshot.state = snapshot.state || {};
@@ -137,11 +163,28 @@ const server = http.createServer(async (req, res) => {
         neu.empfangen = new Date().toISOString();
         snapshot = neu; writeJSON(SNAP, snapshot); return sendJSON(res, 200, { ok: true, actions: actions.filter((a) => a.status === "wartet").length });
       }
-      if (p === "/sync/actions") return sendJSON(res, 200, { actions: actions.filter((a) => a.status === "wartet") });
+      if (p === "/sync/actions") {
+        macZuletzt = Date.now();
+        // Jede Aktion geht genau einmal hinaus; meldet sich der Rechner 20 Minuten nicht dazu, noch einmal.
+        const offen = () => actions.filter((a) => a.status === "wartet" && !(a.vergeben && Date.now() - a.vergeben < 20 * 60000));
+        const antworten = () => { macZuletzt = Date.now(); const l = offen(); for (const a of l) a.vergeben = Date.now(); sendJSON(res, 200, { actions: l }); };
+        const warte = Math.min(Number(u.searchParams.get("warte") || 0), 25);
+        if (!warte || offen().length) return antworten();
+        let zu = false;
+        const t = setTimeout(() => { if (!zu) { zu = true; const i = macWartet.indexOf(wecken); if (i >= 0) macWartet.splice(i, 1); antworten(); } }, warte * 1000);
+        const wecken = () => { if (!zu) { zu = true; clearTimeout(t); antworten(); } };
+        macWartet.push(wecken);
+        req.on("close", () => { if (!zu) { zu = true; clearTimeout(t); const i = macWartet.indexOf(wecken); if (i >= 0) macWartet.splice(i, 1); } });
+        return;
+      }
       if (p === "/sync/ack" && req.method === "POST") {
         const b = JSON.parse((await readBody(req)).toString("utf8"));
-        for (const r of b.results || []) { const a = actions.find((x) => x.id === r.id); if (a) { a.status = r.ok ? "erledigt" : "fehler"; a.ergebnis = r.ergebnis; a.erledigt = new Date().toISOString(); } }
-        actions = actions.filter((a) => a.status === "wartet" || Date.now() - Date.parse(a.erledigt || a.ts) < 7 * 864e5);
+        for (const r of b.results || []) {
+          const a = actions.find((x) => x.id === r.id); if (!a) continue;
+          a.status = r.ok ? "erledigt" : "fehler"; a.ergebnis = r.ergebnis; a.http = r.status || (r.ok ? 200 : 500); a.erledigt = new Date().toISOString();
+          const w = warter.get(a.id); if (w) { warter.delete(a.id); w(a); }
+        }
+        actions = actions.filter((a) => a.status === "wartet" || (a.method !== "GET" && Date.now() - Date.parse(a.erledigt || a.ts) < 7 * 864e5));
         writeJSON(ACT, actions); return sendJSON(res, 200, { ok: true });
       }
       if (p === "/sync/assets") {
@@ -182,7 +225,7 @@ const server = http.createServer(async (req, res) => {
       if (p === "/sync/asset" && req.method === "DELETE") { const f = safe(ASSETS, decodeURIComponent(u.searchParams.get("path") || "")); if (f && fs.existsSync(f)) fs.unlinkSync(f); return sendJSON(res, 200, { ok: true }); }
       return sendJSON(res, 404, {});
     }
-    if (p === "/api/online") return sendJSON(res, 200, { stand: snapshot.stand || snapshot.empfangen || null, offen: actions.filter((a) => a.status === "wartet").length });   // Health-Check, ohne Login
+    if (p === "/api/online") return sendJSON(res, 200, { stand: snapshot.stand || snapshot.empfangen || null, rechner: macDa(), offen: actions.filter((a) => a.status === "wartet" && a.method !== "GET").length });   // Health-Check, ohne Login
     // ---------- Hochlade-Link fuer Externe: ohne Login, nur mit Schluessel (Anne 16.09.) ----------
     const UPKEY = process.env.UPLOAD_KEY || snapshot.upload_key || "";
     const keyOk = !!UPKEY && (u.searchParams.get("key") || "") === UPKEY;
@@ -202,6 +245,19 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" }); return res.end(html);
     }
     if (req.method === "GET") {
+      if (p.startsWith("/api/aktion/")) {          // Ausgang einer Aktion, die beim Klick noch nicht fertig war
+        const a = actions.find((x) => x.id === p.split("/")[3]);
+        return a ? sendJSON(res, 200, { status: a.status, http: a.http || null, ergebnis: a.ergebnis ?? null, rechner: macDa() })
+                 : sendJSON(res, 404, { error: "Diese Aktion kenne ich nicht mehr." });
+      }
+      if (p === "/api/online") return sendJSON(res, 200, { stand: snapshot.stand || snapshot.empfangen || null, rechner: macDa(),
+        offen: actions.filter((a) => a.status === "wartet" && a.method !== "GET").length });
+      const live = p.startsWith("/api/") && p !== "/api/upload-link" && !p.startsWith("/api/job/a-");
+      if (live && macDa()) {
+        const r = await fern("GET", p + u.search, null, 20);
+        weg(r.a);
+        if (!r.zeit) return sendJSON(res, r.a.http || 200, r.a.ergebnis ?? {});
+      }
       const direkt = { "/api/state": "state", "/api/uebersicht": "uebersicht", "/api/frei": "frei", "/api/kpi": "kpi",
         "/api/material": "material", "/api/learnings": "learnings", "/api/claude-zugang": "claude_zugang",
         "/api/storys": "storys", "/api/karussells": "karussells" };
@@ -236,6 +292,7 @@ const server = http.createServer(async (req, res) => {
           res.writeHead(200, { "Content-Type": type, "Content-Length": st.size }); return fs.createReadStream(f).pipe(res);
         }
       }
+      if (p.startsWith("/api/")) return sendJSON(res, 503, { error: OFFLINE + " Diese Angabe gibt es nur, wenn er läuft.", offline: true });
       return sendJSON(res, 404, { error: "nicht da" });
     }
     if (req.method === "POST") {
@@ -279,10 +336,14 @@ const server = http.createServer(async (req, res) => {
       }
       if (p.startsWith("/api/upload")) return sendJSON(res, 400, { error: "nicht verfuegbar" });
       let body = {}; try { body = JSON.parse((await readBody(req)).toString("utf8") || "{}"); } catch {}
-      const a = queue("http", p, "POST", body); optimistic(p, body);
-      if (p === "/api/job") return sendJSON(res, 200, { id: a.id, queued: true });
-      if (p === "/api/claude") return sendJSON(res, 200, { reply: "Auftrag liegt beim Rechner — Ergebnis erscheint nach dem nächsten Sync.", queued: true, id: a.id });
-      return sendJSON(res, 200, { ok: true, queued: true, id: a.id, n: Array.isArray(body.plan) ? body.plan.length : undefined });
+      // Die Anfrage wartet auf die echte Antwort des Rechners (bis 25 s). Kommt sie, sieht die Seite genau,
+      // was dort passiert ist — Erfolg oder Fehler. Kommt sie nicht, sagt die Antwort das ehrlich (202,
+      // `queued`): Die Aktion liegt bereit und wird nachgeholt; die Seite fragt unter /api/aktion/<id> nach.
+      const r = macDa() ? await fern("POST", p, body, 25) : { a: queue("http", p, "POST", body), zeit: true };
+      optimistic(p, body);
+      if (!r.zeit) return sendJSON(res, r.a.http || 200, r.a.ergebnis ?? {});
+      return sendJSON(res, 202, { queued: true, id: r.a.id, rechner: macDa(),
+        hinweis: macDa() ? "Der Rechner arbeitet noch daran — das Ergebnis erscheint gleich." : OFFLINE + " Die Aktion liegt bereit und wird ausgeführt, sobald er wieder da ist." });
     }
     sendJSON(res, 405, {});
   } catch (e) { sendJSON(res, 500, { error: String(e.message).slice(0, 300) }); }
