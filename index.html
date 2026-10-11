@@ -1183,7 +1183,10 @@ function mitLinks(t){
   return esc(String(t||'')).replace(/(https?:\/\/[^\s<]+)/g,
     '<a class="netz" href="$1" target="_blank" rel="noopener">$1</a>');
 }
-async function auftragOeffnen(id){
+// Von selbst (nach dem Ende eines Auftrags) oeffnet sich das Ergebnis je Auftrag hoechstens einmal; per Klick immer.
+const AUTO_GEZEIGT=new Set();
+async function auftragOeffnen(id, vonSelbst){
+  if(vonSelbst){ if(AUTO_GEZEIGT.has(id)) return; AUTO_GEZEIGT.add(id) }
   let a=await api('/api/auftrag/'+encodeURIComponent(id));
   // Ein Auftrag, den der Mac noch nicht kennt (online ausgeloest) oder den es nicht mehr gibt,
   // darf kein leeres Fenster ergeben (Anne 17.09.: „es tut sich nichts").
@@ -1193,6 +1196,7 @@ async function auftragOeffnen(id){
             ? 'Der Auftrag liegt online und wird beim nächsten Abgleich vom Mac übernommen (höchstens eine Minute). Danach steht hier das Ergebnis.'
             : 'Zu diesem Auftrag gibt es keinen Eintrag mehr — das Protokoll hält die letzten 40 fest.' };
   }
+  const offen=document.getElementById('aufDetail'); if(offen) offen.remove();     // immer nur EIN Ergebnisfenster
   const d=document.createElement('div'); d.className='fenster'; d.id='aufDetail';
   d.innerHTML=`<div class="box" style="width:min(680px,95vw);max-height:88vh;overflow:auto">
     <div class="row" style="justify-content:space-between;align-items:baseline">
@@ -1260,9 +1264,14 @@ async function job(args,label,opts){
   if(!r||r.error){laufAnzeige(null);return toast('Nicht gestartet: '+((r&&r.error)||'keine Antwort'),10000)}
   const auftrag=r.id||r.job;
   if(!auftrag){laufAnzeige(null);return toast('Nicht gestartet: Der Rechner hat keinen Auftrag zurückgemeldet.',10000)}
-  const box=$('#joblog'), t0=Date.now(); let fehler=0;
+  const box=$('#joblog'), t0=Date.now(); let fehler=0, fragt=false, zuEnde=false;
   const t=setInterval(async()=>{
-    const j=await api('/api/job/'+auftrag);
+    // Immer nur EINE Nachfrage zugleich, und das Ende nur einmal: Antwortete der Rechner langsamer als der Takt
+    // (online unter Last), liefen zwei Nachfragen nebeneinander, beide sahen „fertig", und das Ergebnisfenster
+    // ging zweimal auf — das zweite Mal mitten im naechsten Klick (12.10.2026, vom Klicklauf gefunden).
+    if(fragt||zuEnde) return; fragt=true;
+    let j; try{ j=await api('/api/job/'+auftrag) } finally { fragt=false }
+    if(zuEnde) return;
     if(!j||j.error){ if(++fehler<8){laufAnzeige(name,'läuft · warte auf Rückmeldung vom Rechner');return} }
     else fehler=0;
     const sek=Math.round((Date.now()-t0)/1000);
@@ -1271,9 +1280,9 @@ async function job(args,label,opts){
       const letzte=String(j.log||'').trim().split('\n').filter(z=>z.trim()).pop()||'';
       if(j.status==='läuft'||j.status==='wartet'){laufAnzeige(name,(j.status==='wartet'?'wartet, bis der Rechner frei ist':'läuft')+' · '+(sek<90?sek+' s':Math.round(sek/60)+' Min')+(letzte?' · '+letzte.slice(0,70):''));return}
     }
-    clearInterval(t); laufAnzeige(null);
+    zuEnde=true; clearInterval(t); laufAnzeige(null);
     // Anne 17.09.: nicht nur „fertig" — das Ergebnis muss sichtbar sein und anklickbar bleiben. ERST zeigen, dann neu laden.
-    if(!document.getElementById('aufDetail')) auftragOeffnen(auftrag);
+    if(!document.getElementById('aufDetail')) auftragOeffnen(auftrag,true);
     else toast(name+': '+((j&&j.status)||'beendet'),6000);
     load();
   },1500)}
@@ -1284,14 +1293,6 @@ function laufAnzeige(name,text){
     e.style.cssText='position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:60;background:var(--ink,#16233b);color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);max-width:min(720px,92vw)';
     document.body.appendChild(e)}
   e.textContent='⏳ '+name+' — '+text;
-}
-async function claude(stage,params,label){
-  toast(label+' — Claude arbeitet … (kann einige Minuten dauern)',8000);
-  const out=$('#claudeout');if(out)out.textContent='… Claude arbeitet';
-  const r=await post('/api/claude',{stage,...params});
-  if(out)out.textContent=r.error||r.reply;
-  await load();
-  if(r.auftrag) auftragOeffnen(r.auftrag); else toast(r.error?r.error:label+' fertig',8000);
 }
 
 function render(){
@@ -1423,10 +1424,6 @@ function vUeber(m){
   });
 }
 
-function vFrei(m){
-  m.innerHTML='<h1>Freigegebener Content</h1><div class="grid" id="freigrid">lädt …</div>';
-  api('/api/frei').then(d=>{const g=$('#freigrid');if(!g)return;g.innerHTML=(d.reels||[]).map(r=>`<div class="card"><span class="pill freigegeben">freigegeben</span><h3 style="margin-top:8px">${esc(r.titel)}</h3><div class="meta">CTA ${esc(r.cta||'–')}</div><p style="font-size:13px;color:var(--grey);margin:8px 0">${esc(r.caption)}…</p><video controls preload="metadata" style="max-width:100%" src="/ready/${encodeURIComponent(r.slug)}/reel.mp4"></video><div class="row" style="margin-top:10px"><button class="btn" onclick="nav('plan')">In den Contentplan →</button></div></div>`).join('')||''});
-}
 // Online liegen nur die kleinen Web-Fassungen; die Originale gibt es ausschliesslich auf Annes Mac.
 // Zeigte das Tool trotzdem auf den Mac-Pfad, kam ein schwarzer Kasten ohne Erklaerung
 // (Anne 18.09.: „wo liegt gerade wieder das Problem, dass ich keine Videos sehen kann?").
@@ -1978,8 +1975,12 @@ async function anweisungSenden(dir){
   if(r.error){st.textContent=r.error;return}
   t.value=''; st.textContent='läuft — das Reel wird neu gebaut';
   anweisungenLaden(dir);
-  if(r.job){const p=setInterval(async()=>{const j=await api('/api/job/'+r.job);
-    if(j.status&&j.status!=='läuft'){clearInterval(p);st.textContent='fertig';anweisungenLaden(dir);auftragOeffnen(r.job)}},3000)}
+  // „wartet" (in der Reihe hinter einem anderen Bau) ist NICHT fertig — vorher stand dann schon „fertig" da.
+  if(r.job){let fragt=false,zuEnde=false;const p=setInterval(async()=>{ if(fragt||zuEnde)return; fragt=true;
+    let j; try{ j=await api('/api/job/'+r.job) } finally { fragt=false }
+    if(zuEnde||!j||j.error) return;
+    if(j.status==='wartet'){st.textContent='wartet, bis der Rechner frei ist';return}
+    if(j.status&&j.status!=='läuft'){zuEnde=true;clearInterval(p);st.textContent=j.status==='fehler'?'nicht gelungen — siehe Ergebnis':'fertig';anweisungenLaden(dir);auftragOeffnen(r.job,true)}},3000)}
 }
 async function anweisungenLaden(dir){
   const box=document.getElementById('anwListe'); if(!box)return;
@@ -1992,12 +1993,6 @@ async function anweisungenLaden(dir){
       ${a.ergebnis?`<div class="erg">${esc(a.ergebnis)}</div>`:''}
       ${a.von_hand?`<div class="erg" style="color:var(--red)">von Hand: ${esc(a.von_hand)}</div>`:''}</div></div>`).join('')
     :'<p class="meta" style="margin:0">Noch keine Anweisung.</p>';
-}
-// ===== Storys =====
-async function storyFreigeben(name){
-  const d=await post('/api/story/freigeben',{name});
-  toast(d.ok?'✓ Stories freigegeben — die Routine plant sie ein.':(d.error||'Fehler'));
-  render();
 }
 // Storys: Rohmaterial und Freigabe getrennt
 function vStoryRohListe(m){ storyListe(m,'roh') }
@@ -2040,28 +2035,6 @@ function storyListe(m,art){
       || `<p class="meta">${art==='roh'
             ? 'Kein offenes Rohmaterial'+(xs.length?' — alles verarbeitet. '+xs.length+' Storys liegen weiter hinten: ':' ')+(xs.length?'<a class="netz" style="cursor:pointer" onclick="nav(\'storyFrei\')">zur Freigabe →</a>':'')
             : 'Nichts zur Freigabe'+(xs.length?' — '+xs.length+' Storys sind noch Rohmaterial: <a class="netz" style="cursor:pointer" onclick="nav(\'storyRoh\')">ansehen →</a>':'')}</p>`});
-  return '';
-}
-// Eigene Seite fuer Storys: Rohmaterial -> untertitelt (zur Pruefung) -> freigegeben
-function vStorys(m){
-  m.innerHTML='<h1>Storys</h1><div id="stBox">lädt …</div>';
-  api('/api/storys').then(d=>{const b=$('#stBox');if(!b)return;
-    const xs=d.storys||[];
-    const gruppen=[['pruefung','Zur Prüfung — Untertitel sind drauf'],['freigegeben','Freigegeben — im Contentplan'],['nacharbeit','Bei Nico in Nacharbeit'],['rohmaterial','Rohmaterial — wird verarbeitet']];
-    b.innerHTML=gruppen.map(([ph,titel])=>{const g=xs.filter(x=>x.phase===ph);
-      return g.length?`<div class="sec"><h2>${titel} <span class="pill">${g.length}</span></h2>
-      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${g.map(x=>`
-        <div class="card"><b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
-          ${x.video?`<video src="${x.video}" controls preload="metadata" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:#000"></video>`
-                   :`<div class="meta" style="font-size:11px;margin:8px 0">${x.dateien||0} Datei(en) · ${esc(x.quelle||'')}</div>`}
-          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto">${esc(x.notizen.slice(0,200))}</div>`:''}
-          <div class="row" style="gap:6px;margin-top:8px">
-            ${ph==='pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="stFreigeben('${esc(x.name)}')">Freigeben</button>
-              <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
-            ${ph==='freigegeben'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>
-              <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
-            ${ph==='rohmaterial'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('storyroh',{name:'${esc(x.name)}'})">Ansehen</button>`:''}
-          </div></div>`).join('')}</div></div>`:''}).join('')||'<p class="meta">Noch keine Storys.</p>'});
   return '';
 }
 function stZurFreigabe(name){
@@ -2167,26 +2140,6 @@ function karListe(m,art){
 }
 // Eigene Seite fuer Karussells (Anne 17.09.): erst prueft jemand, dann steht es im Contentplan
 const KAR_ART={fertig:'fertige Seiten',material:'Rohmaterial — Nico baut die Seiten',anweisung:'nur Anweisungen'};
-function vKarussells(m){
-  m.innerHTML='<h1>Karussells</h1><div id="ksBox">lädt …</div>';
-  api('/api/karussells').then(d=>{const b=$('#ksBox');if(!b)return;
-    const ks=d.karussells||[];
-    const gruppen=[['zur-pruefung','Zur Prüfung'],['bereit-zum-posten','Freigegeben — im Contentplan'],['gepostet','Gepostet']];
-    b.innerHTML=gruppen.map(([ph,titel])=>{const xs=ks.filter(x=>x.phase===ph);
-      return xs.length?`<div class="sec"><h2>${titel} <span class="pill">${xs.length}</span></h2>
-      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${xs.map(x=>`
-        <div class="card">
-          ${x.bild?`<img onerror="bildFehlt(this)" src="${x.bild}" style="width:100%;border-radius:8px;display:block;margin-bottom:8px">`:'<div class="meta" style="font-size:12px;margin-bottom:8px">noch keine Seiten</div>'}
-          <b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
-          <span class="meta" style="font-size:11px">${esc(KAR_ART[x.art]||x.art)} · ${x.slides} Seiten${x.material?` · ${x.material} Material`:''}</span>
-          ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto;margin-top:6px">${esc(x.notizen.slice(0,200))}</div>`:''}
-          <div class="row" style="gap:6px;margin-top:8px">
-            <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.name)}'})">Öffnen</button>
-            ${ph==='zur-pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="ksFreigeben('${esc(x.name)}')">Freigeben</button>`:''}
-            ${ph==='bereit-zum-posten'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>`:''}
-          </div></div>`).join('')}</div></div>`:''}).join('')||'<p class="meta">Noch keine Karussells.</p>'});
-  return '';
-}
 function ksFreigeben(name){
   // Nach dem Freigeben auf DERSELBEN Seite bleiben (vorher sprang die Ansicht auf eine alte Sammelseite).
   tun('/api/karussell/'+encodeURIComponent(name),{freigeben:true},'✓ Freigegeben — steht jetzt im Contentplan')
