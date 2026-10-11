@@ -146,7 +146,10 @@ const server = http.createServer(async (req, res) => {
       }
       if (p === "/sync/assets") {
         const out = []; const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else { const st = fs.statSync(f); out.push({ path: "/" + path.relative(ASSETS, f).split(path.sep).join("/"), size: st.size, mtime: Math.floor(st.mtimeMs / 1000) }); } } };
-        walk(ASSETS); return sendJSON(res, 200, { assets: out });
+        walk(ASSETS);
+        // 11.10.2026: freien Platz mitmelden — die Platte lief voll, und sieben Stunden lang merkte es niemand.
+        let frei_gb = null; try { const s = fs.statfsSync(DATA); frei_gb = Math.round(s.bavail * s.bsize / 1e7) / 100; } catch {}
+        return sendJSON(res, 200, { assets: out, frei_gb });
       }
       if (p === "/sync/asset" && req.method === "POST") {
         const rel = decodeURIComponent(u.searchParams.get("path") || ""); const f = safe(ASSETS, rel);
