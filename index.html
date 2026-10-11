@@ -1262,9 +1262,11 @@ document.querySelectorAll('nav button[data-v]').forEach(b=>b.onclick=()=>nav(b.d
 try{const st=JSON.parse(localStorage.getItem('navZu')||'{}');Object.entries(st).forEach(([g,zu])=>{if(zu)navGruppe(g,false)})}catch{}
 async function sessionEntfernen(id){if(!confirm('Diesen Upload aus dem Eingang entfernen? (Datei wird verschoben, nicht gelöscht)'))return;if(await tun('/api/session-entfernen',{id},'Aus dem Eingang entfernt')){await load();nav('eingang')}}
 async function uploadLink(){const d=await api('/api/upload-link');if(!d.link)return toast('Kein Upload-Schlüssel gesetzt');try{await navigator.clipboard.writeText(d.link)}catch{}toast('Upload-Link kopiert: '+d.link,12000)}
-async function uploadFrei(inp){const f=inp.files[0];if(!f)return;toast('Lade fertige Fassung hoch … ('+Math.round(f.size/1e6)+' MB)');
- const r=await fetch('/api/upload-frei?session='+encodeURIComponent(cur.session)+'&slug='+encodeURIComponent(cur.slug),{method:'POST',body:f});const d=await r.json();
- toast(d.ok?'✓ Fertige Fassung liegt in 3 · Freigegeben — bereit für den Contentplan.':'Fehler beim Upload');load()}
+async function uploadFrei(inp){const f=inp.files[0];if(!f)return;
+  if(!confirm('„'+f.name+'“ ('+Math.round(f.size/1e6)+' MB) als fertige Fassung dieses Reels hochladen?\n\nSie steht danach unter Freigegeben im Contentplan.'))return;
+  const fin=await uplLiefern('',{name:cur.slug+'.mp4',art:'frei',frei_session:cur.session,frei_slug:cur.slug,absender:uplAbsender()},[{file:f,art:'video',name:cur.slug+'.mp4'}]);
+  if(!fin)return;
+  toast(window.HOSTED?'✓ Hochgeladen. Der Rechner im Studio legt die Fassung jetzt unter Freigegeben ab (etwa eine Minute).':'✓ Die fertige Fassung liegt unter Freigegeben — bereit für den Contentplan.',9000);load()}
 // `opts.url`/`opts.body`: manche Auftraege haben einen eigenen Endpunkt (z. B. Story-Anweisungen,
 // die erst den Ordner aufloesen muessen) — die Verfolgung des Auftrags ist danach dieselbe.
 async function job(args,label,opts){
@@ -1598,21 +1600,28 @@ function vFrei(m){
   m.innerHTML='<h1>Freigegebener Content</h1><div class="grid" id="freigrid">lädt …</div>';
   api('/api/frei').then(d=>{const g=$('#freigrid');if(!g)return;g.innerHTML=(d.reels||[]).map(r=>`<div class="card"><span class="pill freigegeben">freigegeben</span><h3 style="margin-top:8px">${esc(r.titel)}</h3><div class="meta">CTA ${esc(r.cta||'–')}</div><p style="font-size:13px;color:var(--grey);margin:8px 0">${esc(r.caption)}…</p><video controls preload="metadata" style="max-width:100%" src="/ready/${encodeURIComponent(r.slug)}/reel.mp4"></video><div class="row" style="margin-top:10px"><button class="btn" onclick="nav('plan')">In den Contentplan →</button></div></div>`).join('')||''});
 }
+let VS={suche:'',alle:false};
 function vVorschnitt(){
- // Anne 28.08.: Vorschnitt = Übersicht der fertigen Reels; EIN Klick öffnet das Schnittstudio (Reel-Detail).
- const alle=S.sessions.flatMap(s=>s.reels.filter(r=>r.gerendert).map(r=>({...r,session:s.id})));
- const grp={}; alle.forEach(r=>{(grp[r.session]=grp[r.session]||[]).push(r)});
+ const imStudio=new Set(((S.schnittstudio||{}).pakete||[]).map(p=>p.slug));
+ let alle=S.sessions.flatMap(s=>s.reels.filter(r=>r.gerendert).map(r=>({...r,session:s.id,datum:s.datum||''})));
+ const gesamt=alle.length, q=VS.suche.trim().toLowerCase();
+ if(q) alle=alle.filter(r=>(r.titel+' '+r.session+' '+r.slug).toLowerCase().includes(q));
+ alle.sort((a,b)=>String(b.datum).localeCompare(String(a.datum)));
+ const zeigen=(VS.alle||q)?alle:alle.slice(0,30);
+ const grp={}; zeigen.forEach(r=>{(grp[r.session]=grp[r.session]||[]).push(r)});
  return `<h1>Vorschnitt</h1>
- 
+ <div class="sub">${gesamt} Vorschnitte. Jeder wird nach dem Bau von selbst ans Schnittstudio übergeben.</div>
+ <div class="row" style="margin:10px 0"><input id="vsSuche" type="search" placeholder="Suchen (Titel oder Aufnahme)" value="${esc(VS.suche)}" oninput="VS.suche=this.value;clearTimeout(VS.t);VS.t=setTimeout(()=>{render();const e=document.getElementById('vsSuche');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}},250)" style="flex:1;max-width:420px;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:10px"></div>
  ${Object.keys(grp).length?Object.entries(grp).map(([sid,reels])=>`
   <div class="sec" style="border:0;padding:0;margin-top:18px"><h2>${esc(sid)}</h2></div>
   <div class="grid">${reels.map(r=>`
    <div class="card" onclick="nav('reel',{session:'${esc(sid)}',slug:'${esc(r.slug)}'})">
     <div class="row" style="justify-content:space-between"><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span><span class="meta">${r.dauer_s?Math.round(r.dauer_s)+' s':''}</span></div>
     <h3 style="margin-top:8px">${esc(r.titel)}</h3>
-    <div class="meta">${r.gerendert?`Viral ${r.viral?r.viral.score+'/'+r.viral.schwelle:'–'} · CTA ${esc(r.cta||'–')}`:'wird gerade gebaut …'}</div>
-    <div class="row" style="margin-top:10px"><button class="btn btn-primary" onclick="event.stopPropagation();schnittstudioPaket('${esc(WORKP(sid))}/reels/${esc(r.slug)}')">▶ Ans Schnittstudio geben</button></div>
-   </div>`).join('')}</div>`).join(''):''}`;
+    <div class="meta">Viral ${r.viral?r.viral.score+'/'+r.viral.schwelle:'–'} · CTA ${esc(r.cta||'–')}</div>
+    <div class="meta" style="margin-top:6px">${imStudio.has(r.slug)?'✓ liegt im Schnittstudio':'noch nicht im Schnittstudio — auf der Reel-Seite übergeben'}</div>
+   </div>`).join('')}</div>`).join(''):'<p class="meta">Nichts gefunden.</p>'}
+ ${(!VS.alle&&!q&&alle.length>30)?`<div class="row" style="margin-top:18px"><button class="btn ghost" onclick="VS.alle=true;render()">Alle ${alle.length} zeigen</button></div>`:''}`;
 }
 // Automatik je Aufnahme: steht sie, steht hier in einem Satz, warum — und wann es weitergeht.
 const AUTO_WORT={wartet:'wartet',gescheitert:'steht',offen:'in der Reihe',laeuft:'läuft',fertig:'durch',aussortiert:'aussortiert'};
@@ -1638,7 +1647,6 @@ function vEingang(){
     ${ladder(s.status)}<div style='height:7px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden'><i style='display:block;height:100%;width:${s.fortschritt??0}%;background:linear-gradient(90deg,var(--camel),var(--yellow))'></i></div><div class='meta' style='margin-top:4px'>${s.fortschritt??0} % verarbeitet</div></div>`).join('')}</div>
   ${S.jobs.length?`<div class="sec"><h2>Letzte Läufe</h2><table>${S.jobs.map(j=>`<tr><td>${esc(j.start.slice(11,16))}</td><td>tet-reel ${esc(j.cmd)}</td><td><span class="pill ${j.status==='fehler'?'fehler':j.status==='fertig'?'ok':''}">${esc(j.status)}</span></td></tr>`).join('')}</table></div>`:''}`;
 }
-function srLaden(btn,url){btn.outerHTML=`<video src="${url}" controls autoplay preload="metadata" style="width:100%;max-width:240px;border-radius:10px"></video>`}
 // Eigene Upload-Seite (Anne 17.09.): alle Upload-Wege an einem Ort, samt Link fuer Externe
 function vUpload(m){
   m.innerHTML=`<h1>Upload</h1>
@@ -1658,7 +1666,8 @@ function vUpload(m){
 function vStudio(m){
   const st=(S&&S.schnittstudio)||{pakete:[]};
   const lokal=!window.HOSTED;
-  const adresse=lokal?'http://localhost:4410':(st.url||'');
+  // Wer das Studio ueber das private Netz oeffnet, braucht das Schnittstudio auf DEMSELBEN Rechner — nicht auf dem eigenen.
+  const adresse=lokal?(location.protocol+'//'+location.hostname+':4410'):(st.url||'');
   const karten=(st.pakete||[]).map(p=>`<div class="card">
       <div class="row" style="justify-content:space-between"><span class="pill">${esc(p.format||'')}</span><span class="meta">${p.dauer_s?Math.round(p.dauer_s)+' s':''}</span></div>
       <h3 style="margin-top:8px">${esc(p.titel||p.slug)}</h3>
@@ -1740,7 +1749,8 @@ function storyListe(m,art){
             ${ph==='freigegeben'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>
               <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
             ${ph==='rohmaterial'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('storyroh',{name:'${esc(x.name)}'})">Ansehen</button>`
-              :`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyAendern('${esc(x.name)}','${esc(x.video||'')}')">Ändern …</button>`}
+              :`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyAendern('${esc(x.name)}','${esc(x.video||'')}')">Ändern …</button>${x.phase==='nacharbeit'?`
+              <button class="btn" style="font-size:12px;padding:5px 10px" onclick="stZurFreigabe('${esc(x.name)}')">Zurück in die Freigabe</button>`:''}`}
           </div></div>`).join('')}</div></div>`:''}).join('')
       || `<p class="meta">${art==='roh'
             ? 'Kein offenes Rohmaterial'+(xs.length?' — alles verarbeitet. '+xs.length+' Storys liegen weiter hinten: ':' ')+(xs.length?'<a class="netz" style="cursor:pointer" onclick="nav(\'storyFrei\')">zur Freigabe →</a>':'')
@@ -1796,6 +1806,8 @@ function vStorys(m){
           </div></div>`).join('')}</div></div>`:''}).join('')||'<p class="meta">Noch keine Storys.</p>'});
   return '';
 }
+function stZurFreigabe(name){
+  tun('/api/story-freigeben',{name,aus:'nacharbeit'},'✓ Liegt wieder zur Freigabe bereit').then(r=>{if(r)render()})}
 function stFreigeben(name){
   tun('/api/story-freigeben',{name},'✓ Freigegeben — steht jetzt im Contentplan')
     .then(r=>{if(!r)return;MATERIAL=null;materialFrisch(true);render()})}
@@ -1900,7 +1912,7 @@ function vStoryRoh(m){
     b.innerHTML=`<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px"><span class="pill">${esc(d.quelle)}</span><span class="pill">${d.dateien.length} Datei(en)</span>${d.dropbox?`<a class="btn ghost" target="_blank" rel="noopener" href="${d.dropbox}">Dropbox-Ordner ↗</a>`:''}</div>
     <div class="grid">${d.dateien.map(f=>`<div class="card"><b>${esc(f.name)}</b><div class="meta">${Math.round(f.groesse/1e6)} MB · ${esc(f.mtime)}</div>
       <div class="srV" style="margin:8px 0">${f.vorschau?`<video src="${f.vorschau}" controls preload="metadata" style="width:100%;max-width:240px;border-radius:10px"></video>`:`<div class="meta" style="font-size:12px">Vorschau wird gerade erzeugt …</div>`}</div>
-      <div class="row" style="gap:8px"><button class="btn" onclick="job(['story-heute','${esc(f.pfad).replace(/'/g,"\\'")}'],'Untertitel + sofort posten')">⚡ Untertitel + sofort posten</button></div></div>`).join('')}</div>
+      <div class="row" style="gap:8px"><button class="btn" onclick="if(confirm('Diese Story bekommt jetzt Untertitel und wird für HEUTE eingeplant — sie geht ohne weitere Freigabe raus.\n\nWirklich?'))job(['story-heute','${esc(f.pfad).replace(/'/g,"\\'")}'],'Untertitel + sofort posten')">⚡ Untertitel + sofort posten</button></div></div>`).join('')}</div>
     <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>`;
     // Vorschau wird gerade gebaut -> in Ruhe nachladen, bis sie da ist
     if(d.vorschauLaeuft && view==='storyroh'){clearTimeout(window._srT);window._srT=setTimeout(()=>{if(view==='storyroh')vStoryRoh(m)},6000)}
@@ -1913,7 +1925,7 @@ function vSession(){
     const vb=$('#verlauf');
     if(vb){const v=d.verlauf||[];
       vb.innerHTML=(d.automatik&&d.automatik.stand!=='fertig'?`<div class="zuord" style="margin-bottom:10px">${automatikZeile(d.automatik)}${d.automatik.stand==='gescheitert'?`<button class="btn ghost" style="margin-top:6px" onclick="job(['automatik','${esc(s.id)}','--frei'],'Wieder freigeben')">Wieder anlaufen lassen</button>`:''}</div>`:'')+(d.aktiv?`<div class="zuord" style="border-left-color:var(--green);background:#eefaf3;border-color:#bfe8cf"><b>Wird gerade bearbeitet</b> — seit ${d.aktiv.minuten??0} Min. <span class="meta" style="display:block;margin-top:4px">${esc((d.aktiv.letzte||[]).slice(-1)[0]||'')}</span></div>`:'')
-        +(d.naechster?`<div class="zuord" style="margin-bottom:10px"><b>Als Nächstes:</b> ${esc(d.naechster.text)} <span class="pill">${esc(d.naechster.wer)}</span>${d.naechster.wer==='Claude'&&!d.claude_bereit?' <span style="color:var(--red)">— Claude-Zugang fehlt (Übersicht)</span>':''}</div>`:'')
+        +(d.naechster?`<div class="zuord" style="margin-bottom:10px"><b>Als Nächstes:</b> ${esc(d.naechster.text)} <span class="pill">${esc(d.naechster.wer)}</span>${d.naechster.wer==='Claude'&&!d.claude_bereit?' <span style="color:var(--red)">— Claude-Zugang fehlt (Seite „Upload“, ganz unten)</span>':''}</div>`:'')
         +(v.length?`<table>${v.map(e=>`<tr><td style="white-space:nowrap;color:var(--grey)">${esc(e.zeit)}</td><td><b>${esc(e.schritt)}</b>${e.detail?'<br><small class="hint">'+esc(e.detail)+'</small>':''}</td></tr>`).join('')}</table>`:'<p class="meta">Noch nichts passiert.</p>')}
     const rb=$('#rohbox');
     if(rb){const r=d.rohmaterial||[];
@@ -1926,19 +1938,14 @@ function vSession(){
     box.innerHTML=ks.length?ks.sort((a,b)=>b.score-a.score).map(k=>`<div class="kand"><div class="row" style="justify-content:space-between"><b>${esc(k.titel||k.id)}</b><span class="pill">Score ${Math.round((k.score||0)*100)}</span></div>
       <div class="hook">„${esc(k.hook_satz||'')}"</div><div class="meta">${esc(k.bereich_t||'')} · Varianten ${Object.keys(k.varianten||{}).join('/')||'–'} · CTA ${esc(k.cta_empfehlung||'–')} ${k.ausschluss?'· <span style="color:var(--red)">Ausschluss: '+esc(k.ausschluss)+'</span>':''}</div>
       <div class="meta" style="margin:4px 0 8px">${esc(k.dramaturgie||'')}</div>
-      ${k.ausschluss?'':`<div class="row"><button class="btn" onclick="claude('reel',{session:'${esc(s.id)}',kandidat:'${esc(k.id)}',variante:'45s'},'Reel anlegen + rendern')">Reel anlegen (45s)</button><button class="btn ghost" onclick="claude('reel',{session:'${esc(s.id)}',kandidat:'${esc(k.id)}',variante:'30s'},'Reel anlegen')">30s</button><button class="btn ghost" onclick="claude('reel',{session:'${esc(s.id)}',kandidat:'${esc(k.id)}',variante:'60s'},'Reel anlegen')">60s</button></div>`}</div>`).join('')
-      :`<p class="sub">Noch keine Kandidaten. ${d.transkript?'':'Erst Transkript erzeugen, dann '}Claude die Redaktion machen lassen.</p>`;
+      ${k.ausschluss?'':`<div class="row">${[['45s','Vorschnitt bauen (45 s)',''],['30s','30 s',' ghost'],['60s','60 s',' ghost']].map(([v,t,g])=>`<button class="btn${g}" onclick="job(['vorschnitt','${esc(WORKP(s.id))}','${esc(k.id)}','--variante','${v}'],'Vorschnitt bauen')">${t}</button>`).join('')}</div>`}</div>`).join('')
+      :`<p class="sub">Noch keine Stellen ausgewählt. Die Automatik erledigt Transkript und Redaktion von selbst — oben steht, wo sie gerade ist.</p>`;
     const cl=$('#cleanup');if(cl&&Array.isArray(d.cleanup)){const n=(t)=>d.cleanup.filter(c=>c.typ===t).length;cl.textContent=`Aufräumen: ${n('fuellwort')} Füllwörter · ${n('stotterer')} Stotterer · ${n('falschstart')} Falschstarts`}});
   return `<h1>${esc(s.id)}${String(s.id).startsWith('upload-')?` <button class="btn ghost" style="font-size:12px" onclick="sessionEntfernen('${esc(s.id)}')">✕ aus dem Eingang entfernen</button>`:''}</h1>
   <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">${(()=>{const p=String(s.pfad||'');const i=p.indexOf('Dropbox-LoveLifePassport/');const db=i>=0?'https://www.dropbox.com/home/'+p.slice(i+25).split('/').map(encodeURIComponent).join('/'):null;const f='/files/'+encodeURIComponent(s.id)+'/';
     return `<span class="pill">${esc(s.typ||'')}</span><span class="pill">${esc(s.material||'')}</span>${db?`<a class="btn ghost" target="_blank" rel="noopener" href="${db}">Dropbox-Ordner ↗</a>`:''}${s.transkript?`<a class="btn ghost" target="_blank" href="${f}transkript.indexed.txt">Transkript ↗</a>`:''}${s.kandidaten?`<a class="btn ghost" target="_blank" href="${f}kandidaten-paket.md">Kandidaten-Paket ↗</a>`:''}`})()}</div>
   ${s.notizen||(s.zusatz&&s.zusatz.length)?`<div class="zuord" style="margin-bottom:12px"><b>Hinweise vom Absender${s.absender?' ('+esc(s.absender)+')':''}:</b> ${esc(s.notizen||'–')}${s.zusatz&&s.zusatz.length?'<br><b>Zusatzmaterial:</b> '+s.zusatz.map(esc).join(', '):''}</div>`:''}
   <div class="row" style="margin-bottom:18px">
-    ${(()=>{const zoom=s.typ==='zoom'||s.material==='zoom'; const eingelesen=!zoom||s.status!=='neu'; return `
-    ${zoom?`<button class="btn ${eingelesen?'ghost':''}" ${eingelesen?'disabled':''} onclick="job(['zoom-ingest','${esc(s.pfad||'')}'],'Zoom einlesen')">1 · Zoom einlesen</button>`:''}
-    <button class="btn ${eingelesen&&!s.transkript?'':'ghost'}" ${(!eingelesen||s.transkript)?'disabled':''} title="${eingelesen?'':'erst Zoom einlesen'}" onclick="job(['transcribe','${esc(WORKP(s.id))}'],'Transkript')">${zoom?'2':'1'} · Transkript</button>
-    <button class="btn ghost" ${s.transkript?'':'disabled'} onclick="job(['candidates','${esc(WORKP(s.id))}'],'Kandidaten-Paket')">${zoom?'3':'2'} · Paket bauen</button>
-    <button class="btn ${s.transkript?'':'ghost'}" ${s.transkript?'':'disabled'} onclick="claude('candidates',{session:'${esc(s.id)}'},'Redaktion (Claude)')">${zoom?'4':'3'} · Claude findet Kandidaten</button>`})()}
     <span id="cleanup" class="meta"></span></div>
   
   <div class="sec" style="border:0;padding:0"><h2>Rohmaterial</h2><div id="rohbox" class="grid">lädt …</div></div>
@@ -1962,21 +1969,19 @@ async function vReel(m){
   <div class="row" style="margin-bottom:10px;align-items:center">
     <button class="btn btn-primary" onclick="schnittstudioPaket('${esc(dir)}')">▶ Ans Schnittstudio geben</button>
     <button class="btn" onclick="job(['publish','${esc(dir)}'],'Freigeben')" title="Vorschnitt so freigeben, wie er ist">Freigeben</button>
-    <label class="btn btn-ghost" style="cursor:pointer" title="Ein außerhalb geschnittenes Video hochladen — es ersetzt den Vorschnitt">Fertige Fassung hochladen<input type=file accept=video/mp4 style=display:none onchange="uploadFrei(this)"></label>
-    <button class="btn btn-ghost" onclick="reelTechnik()" title="Technische Werte und Einzelschritte">Technik …</button>
+    <label class="btn btn-ghost" style="cursor:pointer" title="Ein außerhalb geschnittenes Video hochladen — es steht danach unter Freigegeben im Contentplan">Fertige Fassung hochladen<input type=file accept="video/mp4,video/quicktime" style=display:none onchange="uploadFrei(this)"></label>
+    <button class="btn btn-ghost" onclick="job(['run','${esc(dir)}'],'Reel neu bauen')" title="Übernimmt gespeicherte Änderungen an Schnitt und Untertiteln ins Video (einige Minuten)">Neu bauen</button>
+    <button class="btn btn-ghost" onclick="reelTechnik()" title="Weitere Werkzeuge">Mehr …</button>
+    <span class="meta" id="uplStatus"></span>
     ${canPublish?'':`<span class="meta" style="font-size:11px">Prüfung noch offen — Freigeben geht trotzdem</span>`}</div>
   <div class="row" id="reelTechnik" hidden style="margin-bottom:18px;padding:12px;background:var(--navy3);border-radius:var(--rand)">
-    <button class="btn ghost" onclick="job(['run','${esc(dir)}'],'Reel bauen')">Neu bauen</button>
-    <button class="btn ghost" onclick="job(['run','${esc(dir)}','--force'],'Reel ganz neu bauen')">Alles verwerfen und bauen</button>
-    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="claude('sicht',{session:'${esc(cur.session)}',slug:'${esc(cur.slug)}'},'QA-Sicht (Claude)')">Sicht prüfen</button>
-    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="claude('jury',{session:'${esc(cur.session)}',slug:'${esc(cur.slug)}'},'Viral-Jury (Claude)')">Viral-Check</button>
+    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['straffen','${esc(dir)}','--probe'],'Pausen prüfen')" title="Zeigt nur, was gekürzt würde — ändert nichts">Pausen prüfen</button>
+    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="if(confirm('Pausen und doppelte Anläufe aus diesem Reel schneiden? Danach bitte „Neu bauen“.'))job(['straffen','${esc(dir)}'],'Pausen entfernen')">Pausen entfernen</button>
     <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['viral','${esc(dir)}'],'Viral-Score')">Score neu rechnen</button>
-    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['straffen','${esc(dir)}','--probe'],'Pausen prüfen')">Pausen prüfen</button>
-    <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['straffen','${esc(dir)}'],'Pausen entfernen')">Pausen entfernen</button>
-    <button class="btn ghost" ${d.status==='bereit'||d.status==='freigegeben'?'':'disabled'} onclick="job(['schedule','${esc(dir)}'],'Einplanen (Metricool)')">Einplanen</button></div>
+    <button class="btn ghost" onclick="if(confirm('Alle Zwischenstände dieses Reels verwerfen und ganz neu bauen? Das dauert länger als „Neu bauen“.'))job(['run','${esc(dir)}','--force'],'Reel ganz neu bauen')">Alles verwerfen und neu bauen</button></div>
   <div class="two"><div>
     ${videoFeld(d, base)}
-    <div class="sec"><h2>Schnitt · Etappe 1</h2><div id="schnitt" class="meta">lädt …</div></div>
+    <div class="sec"><h2>Schnitt</h2><div id="schnitt" class="meta">lädt …</div></div>
     ${v?`<div class="sec"><h2>Viral-Check</h2><div class="score"><div class="ring" style="--v:${v.score}"><span>${v.score}</span></div><div><b>${v.ueber_schwelle?'über':'unter'} Schwelle ${v.schwelle}</b><br><small class="hint">Heuristik ${v.teile?.heuristik??'–'} · Jury ${v.teile?.jury??'–'} · Korridor Median ${v.teile?.korridor?.konto_median_plays??'–'} Plays</small></div></div>
       ${(v.gruende||[]).length?'<ul style="margin:10px 0 0 18px;font-size:14px">'+v.gruende.map(g=>'<li>'+esc(g)+'</li>').join('')+'</ul>':''}
       ${(v.verbesserungen||[]).length?'<div class="sec"><h2>Verbesserungen</h2><ul style="margin-left:18px;font-size:14px">'+v.verbesserungen.map(g=>'<li>'+esc(g)+'</li>').join('')+'</ul></div>':''}</div>`:''}
@@ -1992,13 +1997,15 @@ async function vReel(m){
       <div id="anwListe" style="margin-top:12px"></div>
       ${(()=>{setTimeout(()=>anweisungenLaden('${esc(dir)}'),200);return ''})()}
     </div></div>
-    ${d.dateien.sfx?`<img onerror="bildFehlt(this)" class="kb" style="margin-top:10px" src="${base}/qa/sfx.png?${d.mtime}" alt="SFX-Kurve">`:''}
-    <div class="sec"><h2>Captions bearbeiten</h2><div id="capedit" class="meta">lädt …</div></div>
-    <div class="sec"><h2>Redaktion (reel.json)</h2><textarea id="reeljson">${esc(JSON.stringify(d.reel,null,1))}</textarea>
-      <div class="row" style="margin-top:8px"><button class="btn ghost" onclick="saveReel()">Speichern</button><button class="btn ghost" onclick="job(['validate','${esc(dir)}'],'Validieren')">Validieren</button></div></div>
-    ${d.sicht?`<div class="sec"><h2>Sicht</h2><pre>${esc(d.sicht)}</pre></div>`:''}
-    ${d.report?`<div class="sec"><h2>QA-Report</h2><pre>${esc(d.report)}</pre></div>`:''}
-    <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre><div id="claudeout" class="sub" style="margin-top:10px;white-space:pre-wrap"></div></div>
+    <div class="sec"><h2>Untertitel bearbeiten</h2><div id="capedit" class="meta">lädt …</div></div>
+    <details class="sec"><summary class="meta" style="cursor:pointer">Für die Technik (Prüfbericht, Rohdaten)</summary>
+      ${d.report?`<h2 style="margin-top:12px">Prüfbericht</h2><pre>${esc(d.report)}</pre>`:''}
+      ${d.sicht?`<h2 style="margin-top:12px">Sicht-Prüfung</h2><pre>${esc(d.sicht)}</pre>`:''}
+      ${d.dateien.sfx?`<img onerror="bildFehlt(this)" class="kb" style="margin-top:10px" src="${base}/qa/sfx.png?${d.mtime}" alt="SFX-Kurve">`:''}
+      <h2 style="margin-top:12px">Rohdaten des Reels</h2><p class="meta" style="font-size:12px">Vorsicht: Der Text ist der Stand vom Öffnen der Seite. Wer oben Schnitt oder Untertitel gespeichert hat, lädt die Seite erst neu.</p>
+      <textarea id="reeljson">${esc(JSON.stringify(d.reel,null,1))}</textarea>
+      <div class="row" style="margin-top:8px"><button class="btn ghost" onclick="saveReel()">Rohdaten speichern</button><button class="btn ghost" onclick="job(['validate','${esc(dir)}/reel.json'],'Regeln prüfen')">Regeln prüfen</button></div></details>
+    <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>
   </div></div>`;
   initSchnitt(d);
   initCaptions(d);
@@ -2275,7 +2282,7 @@ async function anweisungSenden(dir){
   const t=document.getElementById('anwText'), st=document.getElementById('anwStatus');
   const text=(t.value||'').trim(); if(!text)return toast('Bitte die Änderung beschreiben');
   st.textContent='geht an den Rechner …';
-  const r=await post('/api/anweisung',{reel:dir,text,von:'Nico'});
+  const r=await post('/api/anweisung',{reel:dir,text,von:uplAbsender()||'Team'});
   if(r.error){st.textContent=r.error;return}
   t.value=''; st.textContent='läuft — das Reel wird neu gebaut';
   anweisungenLaden(dir);
@@ -2434,7 +2441,9 @@ function vPlan(){
 async function vKpi(m){
   // Anne 14.09.: dienstags KPI-Meeting = App öffnen -> KPI -> alles da.
   m.innerHTML='<h1>KPI</h1><p class="meta">lädt …</p>';
-  const d=await api('/api/kpi'); const posts=(d.posts||[]).slice().sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||''));
+  const d=await api('/api/kpi');
+  if(!d||d.error){m.innerHTML='<h1>KPI</h1><p class="sub" style="color:var(--red)">Die Zahlen ließen sich nicht laden: '+esc((d&&d.error)||'keine Antwort')+'</p><button class="btn ghost" onclick="render()">Noch einmal versuchen</button>';return}
+  const posts=(d.posts||[]).slice().sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||''));
   const snaps=d.snapshots||[]; const last=snaps[snaps.length-1]||{}; const prev=snaps[snaps.length-2]||{};
   const f=(x)=>x==null?'–':Number(x).toLocaleString('de-DE');
   const kwOf=(dt)=>{const x=new Date(dt);const t=new Date(Date.UTC(x.getFullYear(),x.getMonth(),x.getDate()));const day=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-day);const y=new Date(Date.UTC(t.getUTCFullYear(),0,1));return Math.ceil((((t-y)/864e5)+1)/7)};
@@ -2504,8 +2513,7 @@ function vLernen(){
   return `<h1>Lernen</h1>
   
   <table><tr><th>Reel</th><th>Format</th><th>Prognose</th><th>Plays</th><th>Likes</th><th>Komm.</th><th>Status</th></tr>${reels.map(r=>`<tr><td><b>${esc(r.titel)}</b><br><small class="hint">${esc(r.session)}</small></td><td>${esc(r.typ||'')}</td><td>${r.viral.score}</td><td>${r.kpi?.plays??'–'}</td><td>${r.kpi?.likes??'–'}</td><td>${r.kpi?.kommentare??'–'}</td><td><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span></td></tr>`).join('')||'<tr><td colspan=7 class="sub">noch keine bewerteten Reels</td></tr>'}</table>
-  <div class="sec"><h2>Playbook — reel-learnings.md</h2><textarea id="learn">${esc(S.learnings||'# Reel-Learnings\n\n(noch leer — der Analyst schreibt hier mit Belegzahlen, was trägt und was nicht)\n')}</textarea><div class="row" style="margin-top:8px"><button class="btn ghost" onclick="tun('/api/learnings',{text:$('#learn').value},'✓ Gespeichert')">Speichern</button></div></div>
-  <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre><div id="claudeout" class="sub" style="margin-top:10px;white-space:pre-wrap"></div></div>`;
+  <div class="sec"><h2>Playbook — reel-learnings.md</h2><textarea id="learn">${esc(S.learnings||'# Reel-Learnings\n\n(noch leer — der Analyst schreibt hier mit Belegzahlen, was trägt und was nicht)\n')}</textarea><div class="row" style="margin-top:8px"><button class="btn ghost" onclick="tun('/api/learnings',{text:$('#learn').value},'✓ Gespeichert')">Speichern</button></div></div>`;
 }
 fetch('/api/state').then(r=>r.json()).then(s=>{S=s;HOME=(s.sessions[0]?.pfad||'').includes('/Users/')?'/Users/'+(s.sessions[0].pfad.split('/')[2]):'';render()});
 // Anne 17.09.: „kann man das in den Hintergrund verlagern, ohne dass ich es so sehr spüre?"
