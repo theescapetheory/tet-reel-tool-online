@@ -1694,7 +1694,7 @@ function vStudio(m){
       <div class="meta">übergeben ${esc(String(p.erstellt||'').replace('T',' ').slice(0,16))} · ${p.mb} MB</div></div>`).join('');
   m.innerHTML=`<h1>Schnittstudio</h1>
   <div class="sub">Geschnitten wird im escape-schnittstudio. Jeder fertige Vorschnitt wird von selbst dorthin übergeben; fertig exportierte Reels kommen über „Reels-Freigabe" zurück und stehen dann im Contentplan.</div>
-  <div class="row" style="margin:14px 0">${adresse?`<a class="btn btn-primary" style="text-decoration:none" href="${esc(adresse)}" target="_blank" rel="noopener">Schnittstudio öffnen</a>`:'<span class="meta">Die Adresse des Schnittstudios ist hier nicht hinterlegt — frag Anne nach dem Zugang.</span>'}
+  <div class="row" style="margin:14px 0">${adresse?`<a class="btn btn-primary" style="text-decoration:none" href="${esc(adresse)}" target="_blank" rel="noopener">Schnittstudio öffnen</a>${(S.schnittstudio||{}).erreichbar===false?'<span class="meta" style="color:var(--red);margin-left:10px">Das Schnittstudio antwortet gerade nicht — es muss auf Annes Rechner gestartet werden.</span>':''}`:'<span class="meta">Die Adresse des Schnittstudios ist hier nicht hinterlegt — frag Anne nach dem Zugang.</span>'}
     ${lokal?'':'<span class="meta">Erreichbar nur im privaten Netz, mit deinem Zugangsschlüssel.</span>'}</div>
   <div class="sec"><h2>Dort liegen bereit (${(st.pakete||[]).length})</h2>
     ${karten?`<div class="grid">${karten}</div>`:'<p class="meta">Noch kein Vorschnitt übergeben.</p>'}</div>`;
@@ -1878,6 +1878,11 @@ function storyAendernSenden(name){
 // Fehlt ein Bild (online meist: noch nicht hochgeladen), zeigt der Browser ein kaputtes Symbol.
 // Das sagt niemandem etwas — deshalb an seiner Stelle ein grauer Platz mit einem Satz.
 function bildFehlt(el){
+  // Erst noch ein paar Mal versuchen: Eine eben gebaute oder eben hochgeladene Vorschau ist oft Sekunden spaeter da
+  // (online holt der Dienst sie beim ersten Zugriff vom Rechner). Vorher blieb der Platzhalter fuer immer stehen.
+  const n=+(el.dataset.versuch||0);
+  if(n<6&&el.isConnected){el.dataset.versuch=n+1; const u=(el.getAttribute('src')||'').replace(/[?&]neu=\d+$/,'');
+    setTimeout(()=>{if(el.isConnected)el.src=u+(u.includes('?')?'&':'?')+'neu='+Date.now()},n?5000:2500); return}
   if(el.dataset.weg) return; el.dataset.weg='1';
   const d=document.createElement('div');
   d.className='meta';

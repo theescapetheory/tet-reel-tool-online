@@ -121,8 +121,8 @@ const warter = new Map();      // Aktions-id -> Funktion, die die wartende Nutze
 const macWartet = [];          // offene Anfragen des Rechners
 let macZuletzt = 0;
 const macDa = () => macWartet.length > 0 || Date.now() - macZuletzt < 45000;
-function fern(method, p, body, sekunden) {
-  const a = queue("http", p, method, body);
+function fern(method, p, body, sekunden, art) {
+  const a = queue(art || "http", p, method, body);
   return new Promise((ok) => {
     const t = setTimeout(() => { warter.delete(a.id); ok({ a, zeit: true }); }, sekunden * 1000);
     warter.set(a.id, (fertig) => { clearTimeout(t); ok({ a: fertig }); });
@@ -130,6 +130,9 @@ function fern(method, p, body, sekunden) {
 }
 const weg = (a) => { const i = actions.indexOf(a); if (i >= 0) actions.splice(i, 1); };
 const OFFLINE = "Der Rechner im Studio ist gerade nicht erreichbar.";
+const dateiVersucht = new Map();                       // Pfad -> Zeit des letzten Holens; nach 4 s darf es wieder versucht werden
+// (kurz, weil eine Vorschau oft gerade erst gebaut wird: die Seite fragt nach wenigen Sekunden noch einmal)
+setInterval(() => { const jetzt = Date.now(); for (const [k, t] of dateiVersucht) if (jetzt - t > 4000) dateiVersucht.delete(k); }, 2000).unref();
 // sofort sichtbare Aenderungen (Plaene) im Spiegel mitziehen, bis der Rechner den echten Stand liefert
 function optimistic(p, body) {
   snapshot.state = snapshot.state || {};
@@ -230,7 +233,7 @@ const server = http.createServer(async (req, res) => {
     const UPKEY = process.env.UPLOAD_KEY || snapshot.upload_key || "";
     const keyOk = !!UPKEY && (u.searchParams.get("key") || "") === UPKEY;
     if (p === "/hochladen") {
-      if (!keyOk) { res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Link ungültig"); }
+      if (!keyOk) { res.writeHead(403, { "Content-Type": "text/html; charset=utf-8" }); return res.end("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Link nicht gültig</title><body style='font-family:-apple-system,Segoe UI,sans-serif;max-width:520px;margin:15vh auto;padding:0 20px;color:#16233b;line-height:1.5'><h1 style='font-size:22px'>Dieser Hochlade-Link ist nicht (mehr) gültig</h1><p>Vielleicht fehlt ein Stück der Adresse, oder der Link wurde erneuert. Bitte frag bei The Escape Theory nach dem aktuellen Link — dein Material ist nicht verloren, es wurde nur noch nichts hochgeladen.</p>"); }
       const f = [path.join(__dirname, "hochladen.html"), path.join(__dirname, "..", "public", "hochladen.html")].find((x) => fs.existsSync(x));
       if (!f) { res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Seite fehlt"); }
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" }); return res.end(fs.readFileSync(f));
@@ -282,10 +285,37 @@ const server = http.createServer(async (req, res) => {
         const host = req.headers.host || "", proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0];
         return sendJSON(res, 200, { link: UPKEY && host ? `${proto}://${host}/hochladen?key=${UPKEY}` : null, dropbox: snapshot.dropbox_links || {} });
       }
+      // Originaldatei vom Rechner („/datei?p=…", z. B. eine Slide, deren Web-Fassung gerade neu gebaut wird): online
+      // gab es dafuer keine Antwort. Jetzt wird sie beim ersten Ansehen geholt und unter einem festen Namen behalten.
+      if (p === "/datei" && u.searchParams.get("p")) {
+        const q = u.searchParams.get("p"), ext = path.extname(q).toLowerCase();
+        const rel = "/files/_datei/" + crypto.createHash("sha1").update(q).digest("hex") + ext, f = safe(ASSETS, rel);
+        if (f && !fs.existsSync(f) && macDa() && !dateiVersucht.has(rel)) {
+          dateiVersucht.set(rel, Date.now());
+          const r = await fern("GET", "/datei?p=" + encodeURIComponent(q), { ziel: rel }, 25, "datei"); weg(r.a);
+        }
+        if (!f || !fs.existsSync(f)) { res.writeHead(404); return res.end("noch nicht da"); }
+        const st = fs.statSync(f);
+        res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream", "Content-Length": st.size, "Cache-Control": "no-store" }); return fs.createReadStream(f).pipe(res);
+      }
       for (const pre of ["/files/", "/ready/", "/cover/", "/stories/"]) {
         if (p.startsWith(pre)) {
           const f = safe(ASSETS, decodeURIComponent(p));
           if (f && !fs.existsSync(f)) await bildHolen(decodeURIComponent(p), f);
+          // Die Adresse nennt den Stand der Datei auf dem Rechner (?v=…). Ist die Kopie hier aelter, sofort die neue holen;
+          // gelingt das nicht, bleibt die alte besser als nichts.
+          const v = Number(u.searchParams.get("v") || 0);
+          if (f && v && fs.existsSync(f) && Math.floor(fs.statSync(f).mtimeMs / 1000) < v && macDa() && !dateiVersucht.has(p)) {
+            dateiVersucht.set(p, Date.now());
+            const r = await fern("GET", decodeURIComponent(p), { mtime: v }, 25, "datei"); weg(r.a);
+          }
+          // 11.10.2026: Was der Abgleich noch nicht heraufgeladen hat (ein eben hochgeladenes Karussell, eine frisch
+          // gebaute Vorschau), blieb online bis zu zwei Minuten ein leeres Bild. Jetzt holt der Dienst die Datei
+          // in dem Moment vom Rechner, in dem jemand sie ansehen will, und behaelt sie.
+          if (f && !fs.existsSync(f) && macDa() && !dateiVersucht.has(p)) {
+            dateiVersucht.set(p, Date.now());
+            const r = await fern("GET", decodeURIComponent(p), null, 25, "datei"); weg(r.a);
+          }
           if (!f || !fs.existsSync(f)) { res.writeHead(404); return res.end("noch nicht synchronisiert"); }
           const st = fs.statSync(f), ext = path.extname(f).toLowerCase(), type = MIME[ext] || "application/octet-stream", range = req.headers.range;
           if (range && ext === ".mp4") { const [a, b] = range.replace("bytes=", "").split("-"); const s = Number(a), e = b ? Number(b) : st.size - 1; res.writeHead(206, { "Content-Range": `bytes ${s}-${e}/${st.size}`, "Accept-Ranges": "bytes", "Content-Length": e - s + 1, "Content-Type": type }); return fs.createReadStream(f, { start: s, end: e }).pipe(res); }

@@ -147,7 +147,7 @@ $('#senden').onclick=async()=>{
     const da=(ende.angekommen||[]).filter(a=>a.art==='video');
     fill.style.width='100%'; $('#ok').hidden=false;
     const liste=da.length?'<br>'+da.map(a=>'✓ '+esc(a.name)+' · '+mb(a.bytes)).join('<br>'):'';
-    $('#ok').innerHTML=`<b>Angekommen: ${da.length||teile.length} von ${teile.length} ${teile.length>1?'Videos':'Video'}${sek?' · '+minSek(sek)+' Min.':''}</b>${beilagen.length?' + '+beilagen.length+' Zusatzdatei(en)':''}${liste}<br>${teile.length>1?'Die Teile werden zu einem Beitrag verbunden. ':''}${art==='heute'?'Die Story bekommt jetzt Untertitel und geht in wenigen Minuten online.':art==='story'?'Liegt in der Story-Planung.':'Liegt im Eingang und wird verarbeitet.'} Danke!`;
+    $('#ok').innerHTML=`<b>Angekommen: ${da.length||teile.length} von ${teile.length} ${teile.length>1?'Videos':'Video'}${sek?' · '+minSek(sek)+' Min.':''}</b>${beilagen.length?' + '+beilagen.length+' Zusatzdatei(en)':''}${liste}<br>${teile.length>1?'Die Teile werden zu einem Beitrag verbunden. ':''}${art==='heute'?'Die Story bekommt Untertitel und geht danach online — in der Regel innerhalb weniger Minuten.':art==='story'?'Das Team hat es jetzt in der Story-Planung.':'Das Team hat es jetzt und meldet sich, wenn etwas fehlt. Du kannst die Seite schließen.'} Danke!`;
     videos=[]; zusatz=[]; $('#listV').innerHTML=''; $('#listZ').innerHTML=''; $('#notizen').value='';
   }catch(e){let m=e.message;try{m=JSON.parse(m).error||m}catch{};$('#err').textContent='Fehler: '+m; btn.disabled=false}
 };
