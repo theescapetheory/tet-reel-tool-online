@@ -336,7 +336,7 @@ const server = http.createServer(async (req, res) => {
         // die Seite meldete trotzdem „angekommen".
         const art = ["reel", "story", "heute", "karussell", "frei"].includes(b.art) ? b.art : "reel";
         const erwartet = (Array.isArray(b.erwartet) ? b.erwartet : []).map((e) => ({ name: sauber(e.name), art: e.art === "zusatz" ? "zusatz" : "video", bytes: Number(e.bytes) || 0 }));
-        writeJSON(path.join(UPLOADS, id, "paket.json"), { id, name: b.name, art, frei_session: String(b.frei_session || ""), frei_slug: String(b.frei_slug || ""), karussell_art: ["fertig", "material", "anweisung"].includes(b.karussell_art) ? b.karussell_art : "", absender: b.absender || "", notizen: b.notizen || "", zusatz: b.zusatz || [], erwartet, eingang: new Date().toISOString(), status: "offen", quelle: "online" });
+        writeJSON(path.join(UPLOADS, id, "paket.json"), { id, name: b.name, art, frei_session: String(b.frei_session || ""), frei_slug: String(b.frei_slug || ""), karussell_art: ["fertig", "material", "anweisung"].includes(b.karussell_art) ? b.karussell_art : "", absender: b.absender || "", notizen: b.notizen || "", prio: !!b.prio, zusatz: b.zusatz || [], erwartet, eingang: new Date().toISOString(), status: "offen", quelle: "online" });
         return sendJSON(res, 200, { ok: true, id });
       }
       if (p === "/api/upload-paket/datei") {

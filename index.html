@@ -1082,6 +1082,8 @@ const $=(s,r=document)=>r.querySelector(s);
 // Ortszeit, nicht Weltzeit: zwischen 0 und 2 Uhr nachts ergab toISOString() den Vortag (11.10.2026).
 const fmt=(d)=>{const p=(n)=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())};
 const esc=(s)=>String(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// Anne 12.10.2026: Was beim Upload als Prio angekreuzt wurde, steht ueberall oben und traegt diese Marke.
+const PRIO_MARKE='<span class="pill" style="background:#c2410c;color:#fff;border-color:#c2410c;font-weight:700">PRIO</span> ';
 const LADDER=['neu','ingest','transkript','kandidaten','reels','gerendert','qa','viral-ok','freigegeben','bereit','auftrag','geplant','gepostet','kpi'];
 const LABEL={neu:'neu',ingest:'eingelesen',transkript:'Transkript',kandidaten:'Kandidaten',reels:'Reels in Arbeit',angelegt:'angelegt',gerendert:'gerendert',qa:'QA PASS',nachbessern:'nachbessern','viral-ok':'Viral ≥ Schwelle',freigegeben:'freigegeben',bereit:'bereit zum Posten',auftrag:'Einplan-Auftrag (wartet auf Claude-Routine)',geplant:'in Metricool geplant',gepostet:'gepostet',kpi:'KPI ausgewertet'};
 let S=null, view='ueber', cur={session:null,slug:null}, timers=[];
@@ -1494,6 +1496,7 @@ function uplFormular(ziel, key){
     </div>
     <label class="meta" style="display:block;margin-top:12px"><b>Absender</b></label>
     <input id="uplAbsender" type="text" placeholder="Dein Name" oninput="uplAbsenderMerken(this.value)" style="width:100%;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:10px">
+    <label style="display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer"><input id="uplPrio" type="checkbox" style="margin-top:3px;width:18px;height:18px"><span><b>Prio</b> — wird als Nächstes bearbeitet und steht überall ganz oben (auch im Schnittstudio)</span></label>
     <div class="row" style="margin-top:12px;align-items:center"><button class="btn" id="uplGo" onclick="uplSenden('${key||''}')" disabled>Hochladen</button><span id="uplStatus" class="meta"></span></div>
     <div id="uplMeldung" hidden style="margin-top:12px;padding:10px 12px;border-radius:10px;background:#e9f6ec;color:#14532d;font-weight:600"></div></div>`;
   uplZustandZeigen();
@@ -1607,7 +1610,7 @@ async function uplSenden(key){
   const dateien=UPL.videos.map((f,i)=>({file:f,art:'video',name:viele?String(i+1).padStart(2,'0')+'-'+f.name:f.name}))
     .concat(heute?[]:UPL.zusatz.map(f=>({file:f,art:'zusatz',name:f.name})));
   const namen=UPL.videos.map(f=>f.name).join(', ');
-  const fin=await uplLiefern(key,{name:UPL.videos[0].name,art:UPL.art,notizen:heute?'':(UPL.notiz||''),absender:uplAbsenderJetzt()},dateien);
+  const fin=await uplLiefern(key,{name:UPL.videos[0].name,art:UPL.art,notizen:heute?'':(UPL.notiz||''),absender:uplAbsenderJetzt(),prio:uplPrioJetzt()},dateien);
   if(!fin)return;
   const wo={reel:window.HOSTED?'Der Rechner im Studio holt es jetzt ab und beginnt mit der Verarbeitung.':'Liegt im Eingang und wird verarbeitet.',
             story:'Liegt in der Story-Planung.',heute:'Bekommt jetzt Untertitel und wird für heute eingeplant.'}[UPL.art]||'';
@@ -1620,13 +1623,15 @@ async function uplKarussellSenden(key){
   if(UPL.karArt!=='anweisung'&&!UPL.zusatz.length)return toast('Bitte Dateien wählen');
   if(UPL.karArt==='anweisung'&&!notiz)return toast('Bitte Anweisungen eintragen');
   const dateien=UPL.zusatz.map((f,i)=>({file:f,art:'zusatz',name:String(i+1).padStart(2,'0')+'-'+f.name}));
-  const fin=await uplLiefern(key,{name,art:'karussell',karussell_art:UPL.karArt||'fertig',notizen:notiz,absender:uplAbsenderJetzt()},dateien);
+  const fin=await uplLiefern(key,{name,art:'karussell',karussell_art:UPL.karArt||'fertig',notizen:notiz,absender:uplAbsenderJetzt(),prio:uplPrioJetzt()},dateien);
   if(!fin)return;
   uplGemeldet('✓ Angekommen: Karussell „'+name+'“'+(dateien.length?' mit '+dateien.length+' Datei(en)':'')+'. '+(window.HOSTED?'Der Rechner im Studio holt es jetzt ab; danach steht es unter Karussells · Rohmaterial.':'Es steht unter Karussells · Rohmaterial.'));
   UPL={art:'karussell',video:null,videos:[],zusatz:[],notiz:'',karArt:UPL.karArt};uplFormularLeeren();load();
 }
+function uplPrioJetzt(){const e=document.getElementById('uplPrio');return !!(e&&e.checked)}
 function uplAbsenderJetzt(){return ((document.getElementById('uplAbsender')||{}).value||uplAbsender()||'').trim()}
 function uplFormularLeeren(){for(const [id,t] of [['uplV','–'],['uplZ','–']]){const e=document.getElementById(id);if(e)e.textContent=t}
+  {const pr=document.getElementById('uplPrio'); if(pr) pr.checked=false}
   for(const id of ['uplNotiz','uplKarName']){const e=document.getElementById(id);if(e)e.value=id==='uplKarName'?uplKarNameVorschlag():''}
   uplKarPruefen()}
 function uplKarNameVorschlag(){return 'karussell-'+fmt(new Date())}
@@ -1652,10 +1657,10 @@ async function sessionEntfernen(id){if(!confirm('Diesen Upload aus dem Eingang e
 let VS={suche:'',alle:false};
 function vVorschnitt(){
  const imStudio=new Set(((S.schnittstudio||{}).pakete||[]).map(p=>p.slug));
- let alle=S.sessions.flatMap(s=>s.reels.filter(r=>r.gerendert).map(r=>({...r,session:s.id,datum:s.datum||''})));
+ let alle=S.sessions.flatMap(s=>s.reels.filter(r=>r.gerendert).map(r=>({...r,session:s.id,datum:s.datum||'',prio:!!s.prio})));
  const gesamt=alle.length, q=VS.suche.trim().toLowerCase();
  if(q) alle=alle.filter(r=>(r.titel+' '+r.session+' '+r.slug).toLowerCase().includes(q));
- alle.sort((a,b)=>String(b.datum).localeCompare(String(a.datum)));
+ alle.sort((a,b)=>(b.prio?1:0)-(a.prio?1:0)||String(b.datum).localeCompare(String(a.datum)));   // Prio zuerst
  const zeigen=(VS.alle||q)?alle:alle.slice(0,30);
  const grp={}; zeigen.forEach(r=>{(grp[r.session]=grp[r.session]||[]).push(r)});
  return `<h1>Vorschnitt</h1>
@@ -1666,7 +1671,7 @@ function vVorschnitt(){
   <div class="grid">${reels.map(r=>`
    <div class="card" onclick="nav('reel',{session:'${esc(sid)}',slug:'${esc(r.slug)}'})">
     <div class="row" style="justify-content:space-between"><span class="pill ${esc(r.status)}">${esc(LABEL[r.status]||r.status)}</span><span class="meta">${r.dauer_s?Math.round(r.dauer_s)+' s':''}</span></div>
-    <h3 style="margin-top:8px">${esc(r.titel)}</h3>
+    <h3 style="margin-top:8px">${r.prio?PRIO_MARKE:''}${esc(r.titel)}</h3>
     <div class="meta">Viral ${r.viral?r.viral.score+'/'+r.viral.schwelle:'–'} · CTA ${esc(r.cta||'–')}</div>
     <div class="meta" style="margin-top:6px">${imStudio.has(r.slug)?'✓ liegt im Schnittstudio':'noch nicht im Schnittstudio — auf der Reel-Seite übergeben'}</div>
    </div>`).join('')}</div>`).join(''):'<p class="meta">Nichts gefunden.</p>'}
@@ -1690,7 +1695,7 @@ function vEingang(){
     <button class="btn ghost" onclick="job(['watch'],'Dropbox prüfen')" title="Sieht sofort in den Dropbox-Ordnern nach neuem Material (sonst alle 5 Minuten von selbst)">Dropbox jetzt prüfen</button></div>
   <div class="grid">${S.sessions.map(s=>`<div class="card" onclick="nav('session',{session:'${esc(s.id)}'})" title="Projekt öffnen (Verarbeitung, Kandidaten)">
     <div class="row" style="justify-content:space-between"><span class="pill ${esc(s.status)}">${esc(LABEL[s.status]||s.status)}</span>${S.aktiv&&S.aktiv.session===s.id?'<span class="pill ok">läuft gerade</span>':''}<span class="meta">${esc(s.typ||'')} · ${esc(s.material||'')}</span></div>
-    <h3 style="margin-top:10px">${esc(s.id)}</h3>
+    <h3 style="margin-top:10px">${s.prio?PRIO_MARKE:''}${esc(s.id)}</h3>
     ${automatikZeile(s.automatik)}
     <div class="meta">${esc(s.datum||'')} ${s.dauer_s?'· '+Math.round(s.dauer_s/60)+' min':''} ${s.dateien?'· '+s.dateien+' Dateien':''} ${s.kandidaten?'· '+s.kandidaten+' Kandidaten':''} ${s.reels.length?'· '+s.reels.length+' Reels':''}</div>
     ${ladder(s.status)}<div style='height:7px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden'><i style='display:block;height:100%;width:${s.fortschritt??0}%;background:linear-gradient(90deg,var(--camel),var(--yellow))'></i></div><div class='meta' style='margin-top:4px'>${s.fortschritt??0} % verarbeitet</div></div>`).join('')}</div>
@@ -1705,7 +1710,7 @@ function vStudio(m){
   const adresse=lokal?(location.protocol+'//'+location.hostname+':4410'):(st.url||'');
   const karten=(st.pakete||[]).map(p=>`<div class="card">
       <div class="row" style="justify-content:space-between"><span class="pill">${esc(p.format||'')}</span><span class="meta">${p.dauer_s?Math.round(p.dauer_s)+' s':''}</span></div>
-      <h3 style="margin-top:8px">${esc(p.titel||p.slug)}</h3>
+      <h3 style="margin-top:8px">${p.prio?PRIO_MARKE:''}${esc(p.titel||p.slug)}</h3>
       <div class="meta">${esc(p.quelle||'')}</div>
       <div class="meta">übergeben ${esc(String(p.erstellt||'').replace('T',' ').slice(0,16))} · ${p.mb} MB</div></div>`).join('');
   m.innerHTML=`<h1>Schnittstudio</h1>
@@ -2019,7 +2024,7 @@ function storyListe(m,art){
     b.innerHTML=gruppen.map(([ph,t])=>{const g=xs.filter(x=>x.phase===ph);
       return g.length?`<div class="sec"><h2>${t} <span class="pill">${g.length}</span></h2>
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${g.map(x=>`
-        <div class="card">${x.absender?`<div class="eyebrow">von ${esc(x.absender)}</div>`:''}<b style="font-size:13px;line-height:1.25;display:block">${esc(storyTitel(x))}</b>${x.hinweis?`<div class="meta" style="font-size:11px;margin-top:2px">${esc(x.hinweis.slice(0,120))}</div>`:''}
+        <div class="card">${x.absender?`<div class="eyebrow">von ${esc(x.absender)}</div>`:''}<b style="font-size:13px;line-height:1.25;display:block">${x.prio?PRIO_MARKE:''}${esc(storyTitel(x))}</b>${x.hinweis?`<div class="meta" style="font-size:11px;margin-top:2px">${esc(x.hinweis.slice(0,120))}</div>`:''}
           ${x.video?`<video src="${x.video}" ${x.bild?`poster="${x.bild}"`:''} controls preload="none" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:var(--tint);aspect-ratio:9/16;object-fit:cover"></video>`
                    :`<div class="meta" style="font-size:11px;margin:8px 0">${x.dateien||0} Datei(en) · ${esc(x.quelle||'')}</div>`}
           ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto">${esc(x.notizen.slice(0,200))}</div>`:''}
@@ -2125,7 +2130,7 @@ function karListe(m,art){
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${xs.map(x=>`
         <div class="card">
           ${x.bild?`<img onerror="bildFehlt(this)" src="${x.bild}" style="width:100%;border-radius:8px;display:block;margin-bottom:8px">`:'<div class="meta" style="font-size:12px;margin-bottom:8px">noch keine Seiten</div>'}
-          <b style="font-size:13px;line-height:1.25;display:block">${esc(x.name)}</b>
+          <b style="font-size:13px;line-height:1.25;display:block">${x.prio?PRIO_MARKE:''}${esc(x.name)}</b>
           <span class="meta" style="font-size:11px">${esc(KAR_ART[x.art]||x.art)}${x.slides?` · ${x.slides} Seiten`:''}${x.material?` · ${x.material} Material`:''}</span>
           ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto;margin-top:6px">${esc(x.notizen.slice(0,200))}</div>`:''}
           <div class="row" style="gap:6px;margin-top:8px">
