@@ -1380,7 +1380,7 @@ function vUeber(m){
       <div class="meta" style="font-size:12px;margin-top:4px">seit ${esc(String(st.bremse.zeit||'').replace('T',' '))} · schützt vor unbemerkten API-Kosten. Höher setzen? Sag Bescheid.</div></div>`:''}
     ${st.laeuft?`<div class="card" style="border-color:var(--camel);margin-bottom:18px">
       <b style="font-size:14px">Läuft gerade: ${esc(st.laeuft.session)}</b>
-      <div class="meta" style="font-size:12px;margin-top:4px">seit ${st.laeuft.minuten} Min · ${esc((st.laeuft.letzte||[]).slice(-1)[0]||'')}</div></div>`:''}
+      <div class="meta" style="font-size:12px;margin-top:4px">${esc(st.laeuft.was||'Die Aufnahme wird verarbeitet.')} <span style="opacity:.7">· dieser Durchgang läuft seit ${st.laeuft.minuten} Min</span></div></div>`:''}
 
     <div class="sec"><h2>Wo liegt was</h2>
       <div class="kpi-grid">
