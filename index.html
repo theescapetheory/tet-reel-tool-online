@@ -1343,6 +1343,25 @@ async function claudeZugangSpeichern(loeschen){const k=loeschen?'':document.getE
 function zeitseit(ms){ if(!ms) return ''; const t=Math.round((Date.now()-ms)/86400000);
   return t<=0?'heute':t===1?'gestern':'vor '+t+' Tagen'; }
 
+// „Frisch reingekommen" (Anne 12.10.2026): was in den letzten sieben Tagen angekommen ist, neueste oben, alle Contentarten.
+function frischWann(ms){ const d=new Date(ms), h=new Date(); const tag=x=>new Date(x.getFullYear(),x.getMonth(),x.getDate()).getTime();
+  const t=Math.round((tag(h)-tag(d))/86400000), uhr=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  return (t<=0?'heute':t===1?'gestern':'vor '+t+' Tagen')+' · '+uhr+' Uhr'; }
+function frischStand(e){
+  if(e.art==='Reel') return e.stand==='neu'?'wartet auf die Automatik':e.reels?(e.reels+(e.reels===1?' Vorschnitt liegt bereit':' Vorschnitte liegen bereit')):(LABEL[e.stand]||e.stand);
+  return ({'story-roh':'liegt im Story-Rohmaterial','kar-offen':'Karussell · offen','kar-frei':'Karussell · freigegeben',
+    'heute-bereit':'untertitelt, geht heute raus','heute-gepostet':'gepostet','heute-fehler':'Fehler — bitte ansehen'})[e.stand]||'wird verarbeitet'; }
+function frischBlock(liste){
+  const zeilen=(liste||[]).map((e,i)=>`<tr data-frisch="${esc(e.name)}" onclick='nav(${JSON.stringify(e.ziel)},FRISCH[${i}].arg)' style="cursor:pointer">
+    <td style="white-space:nowrap;width:150px"><small class="hint">${esc(frischWann(e.zeit))}</small></td>
+    <td style="width:110px"><span class="pill">${esc(e.art)}</span></td>
+    <td><b>${esc(e.name)}</b>${e.prio?PRIO_MARKE:''}${e.von?`<br><small class="hint">von ${esc(e.von)}</small>`:''}</td>
+    <td><small class="hint">${esc(frischStand(e))}</small></td></tr>`).join('');
+  window.FRISCH=liste||[];
+  return `<div class="sec" id="frisch"><h2>Frisch reingekommen</h2><div class="card">${zeilen
+    ?`<table><tr><th>Wann</th><th>Was</th><th>Name</th><th>Stand</th></tr>${zeilen}</table>`
+    :'<p class="meta" style="margin:0">In den letzten sieben Tagen ist nichts Neues angekommen.</p>'}</div></div>`; }
+
 function vUeber(m){
   // Geruest sofort zeigen, statt die Seite leer zu lassen, bis die Daten da sind (Anne 17.09.)
   m.innerHTML=`<h1>Übersicht</h1>
@@ -1383,6 +1402,8 @@ function vUeber(m){
     ${st.laeuft?`<div class="card" style="border-color:var(--camel);margin-bottom:18px">
       <b style="font-size:14px">Läuft gerade: ${esc(st.laeuft.session)}</b>
       <div class="meta" style="font-size:12px;margin-top:4px">${esc(st.laeuft.was||'Die Aufnahme wird verarbeitet.')} <span style="opacity:.7">· dieser Durchgang läuft seit ${st.laeuft.minuten} Min</span></div></div>`:''}
+
+    ${frischBlock(d.frisch)}
 
     <div class="sec"><h2>Wo liegt was</h2>
       <div class="kpi-grid">
