@@ -2146,7 +2146,7 @@ function vStoryRoh(m){
     b.innerHTML=`<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px"><span class="pill">${esc(d.quelle)}</span><span class="pill">${d.dateien.length} Datei(en)</span>${d.dropbox?`<a class="btn ghost" target="_blank" rel="noopener" href="${d.dropbox}">Dropbox-Ordner ↗</a>`:''}</div>
     <div class="grid">${d.dateien.map(f=>`<div class="card"><b>${esc(f.name)}</b><div class="meta">${Math.round(f.groesse/1e6)} MB · ${esc(f.mtime)}</div>
       <div class="srV" style="margin:8px 0">${f.vorschau?`<video src="${f.vorschau}" controls preload="metadata" style="width:100%;max-width:240px;border-radius:10px"></video>`:`<div class="meta" style="font-size:12px">Vorschau wird gerade erzeugt …</div>`}</div>
-      <div class="row" style="gap:8px"><button class="btn" onclick="if(confirm('Diese Story bekommt jetzt Untertitel und wird für HEUTE eingeplant — sie geht ohne weitere Freigabe raus.\n\nWirklich?'))job(['story-heute','${esc(f.pfad).replace(/'/g,"\\'")}'],'Untertitel + sofort posten')">⚡ Untertitel + sofort posten</button></div></div>`).join('')}</div>
+      <div class="row" style="gap:8px"><button class="btn" onclick="if(confirm('Diese Story bekommt jetzt Untertitel und wird für HEUTE eingeplant — sie geht ohne weitere Freigabe raus. Wirklich?'))job(['story-heute','${esc(f.pfad).replace(/'/g,"\\'")}'],'Untertitel + sofort posten')">⚡ Untertitel + sofort posten</button></div></div>`).join('')}</div>
     <div class="sec"><h2>Lauf-Protokoll</h2><pre id="joblog" class="log">–</pre></div>`;
     // Vorschau wird gerade gebaut -> in Ruhe nachladen, bis sie da ist
     if(d.vorschauLaeuft && view==='storyroh'){clearTimeout(window._srT);window._srT=setTimeout(()=>{if(view==='storyroh')vStoryRoh(m)},6000)}
