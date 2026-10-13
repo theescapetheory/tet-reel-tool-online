@@ -67,7 +67,7 @@ textarea{min-height:110px;resize:vertical}
 <script>
 function cutterSicht(){const a=(document.querySelector('input[name=art]:checked')||{}).value;const b=document.getElementById('cutterBlock');if(b){b.hidden=(a==='heute');if(a==='heute'){zusatz=[];const l=document.getElementById('listZ');if(l)l.innerHTML='';const n=document.getElementById('notizen');if(n)n.value=''}}}
 document.querySelectorAll('input[name=art]').forEach(r=>r.addEventListener('change',cutterSicht));
-const KEY=new URLSearchParams(location.search).get('key')||'';
+const KEY=new URLSearchParams(location.search).get('key')||(location.pathname.startsWith('/hochladen/')?decodeURIComponent(location.pathname.slice(11)):'');
 const $=(s)=>document.querySelector(s);
 let videos=[], zusatz=[];
 function bind(drop,input,onFiles){drop.onclick=()=>input.click();input.onchange=()=>onFiles([...input.files]);

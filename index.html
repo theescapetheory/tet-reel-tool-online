@@ -2370,11 +2370,13 @@ const SLOTS=['08:00','11:30','14:00','17:00','20:00'];
 function planEintrag(unter){
   if(!unter)return;
   const a=(S.auftraege||[]).find(x=>x.unter===unter); if(!a)return toast('Eintrag nicht gefunden');
-  const m=(MATERIAL||[]).find(y=>y.id===a.material);
+  // Eingeplantes steht nicht mehr in der Material-Auswahl — dann traegt der Auftrag seine Vorschau selbst (13.10.2026)
+  const m=(MATERIAL||[]).find(y=>y.id===a.material)||a.vorschau||null;
   const tage=[...Array(21)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d.toISOString().slice(0,10)});
   const zeiten=SLOTS.includes(a.uhrzeit)?SLOTS:[a.uhrzeit,...SLOTS];
-  const schau = m && m.video ? `<video src="${m.video}" controls preload="metadata" playsinline style="width:100%;max-height:46vh;border-radius:12px;background:#000"></video>`
-              : m && (m.coverBild||m.bild) ? `<img onerror="bildFehlt(this)" src="${m.coverBild||m.bild}" style="width:170px;border-radius:10px;display:block">` : '';
+  const schau = (m && m.video ? `<video id="peVideo" src="${m.video}" controls preload="metadata" playsinline style="width:auto;max-width:100%;max-height:46vh;border-radius:12px;background:#000;display:block;margin:0 auto"></video>` : '')
+              + (m && (m.coverBild||m.bild) ? `<div class="sec"><h2>${m.video?'Cover':'Bild'}</h2><img id="peCover" onerror="bildFehlt(this)" src="${m.coverBild||m.bild}" style="width:170px;border-radius:10px;display:block"></div>` : '')
+              || '<p class="meta" style="margin:0">Zu diesem Eintrag liegt (noch) keine Vorschau vor — sie entsteht beim nächsten Takt.</p>';
   const d=document.createElement('div'); d.className='fenster'; d.id='peModal';
   d.innerHTML=`<div class="box" style="width:min(600px,94vw);max-height:88vh;overflow:auto">
     <div class="row" style="justify-content:space-between;align-items:baseline">

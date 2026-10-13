@@ -231,8 +231,13 @@ const server = http.createServer(async (req, res) => {
     if (p === "/api/online") return sendJSON(res, 200, { stand: snapshot.stand || snapshot.empfangen || null, rechner: macDa(), offen: actions.filter((a) => a.status === "wartet" && a.method !== "GET").length });   // Health-Check, ohne Login
     // ---------- Hochlade-Link fuer Externe: ohne Login, nur mit Schluessel (Anne 16.09.) ----------
     const UPKEY = process.env.UPLOAD_KEY || snapshot.upload_key || "";
-    const keyOk = !!UPKEY && (u.searchParams.get("key") || "") === UPKEY;
-    if (p === "/hochladen") {
+    // Anne 13.10.2026: „Der ist so lang und nichtssagend" — neben dem Schluessel gilt ein kurzes, sprechendes Wort
+    // (`_state/upload-kurz.txt` auf dem Rechner), und beides darf im Pfad stehen: /hochladen/<wort>.
+    const UPKURZ = snapshot.upload_kurz || "";
+    const imPfad = p.startsWith("/hochladen/") ? decodeURIComponent(p.slice("/hochladen/".length)) : "";
+    const gezeigt = u.searchParams.get("key") || imPfad || "";
+    const keyOk = !!gezeigt && ((!!UPKEY && gezeigt === UPKEY) || (!!UPKURZ && gezeigt === UPKURZ));
+    if (p === "/hochladen" || imPfad) {
       if (!keyOk) { res.writeHead(403, { "Content-Type": "text/html; charset=utf-8" }); return res.end("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>Link nicht gültig</title><body style='font-family:-apple-system,Segoe UI,sans-serif;max-width:520px;margin:15vh auto;padding:0 20px;color:#16233b;line-height:1.5'><h1 style='font-size:22px'>Dieser Hochlade-Link ist nicht (mehr) gültig</h1><p>Vielleicht fehlt ein Stück der Adresse, oder der Link wurde erneuert. Bitte frag bei The Escape Theory nach dem aktuellen Link — dein Material ist nicht verloren, es wurde nur noch nichts hochgeladen.</p>"); }
       const f = [path.join(__dirname, "hochladen.html"), path.join(__dirname, "..", "public", "hochladen.html")].find((x) => fs.existsSync(x));
       if (!f) { res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Seite fehlt"); }
@@ -283,7 +288,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (p === "/api/upload-link") {
         const host = req.headers.host || "", proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0];
-        return sendJSON(res, 200, { link: UPKEY && host ? `${proto}://${host}/hochladen?key=${UPKEY}` : null, dropbox: snapshot.dropbox_links || {} });
+        return sendJSON(res, 200, { link: host && (snapshot.upload_kurz || UPKEY) ? (snapshot.upload_kurz ? `${proto}://${host}/hochladen/${snapshot.upload_kurz}` : `${proto}://${host}/hochladen?key=${UPKEY}`) : null, dropbox: snapshot.dropbox_links || {} });
       }
       // Originaldatei vom Rechner („/datei?p=…", z. B. eine Slide, deren Web-Fassung gerade neu gebaut wird): online
       // gab es dafuer keine Antwort. Jetzt wird sie beim ersten Ansehen geholt und unter einem festen Namen behalten.
