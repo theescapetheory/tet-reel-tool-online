@@ -110,7 +110,9 @@ const minSek=s=>Math.floor(s/60)+':'+String(Math.round(s%60)).padStart(2,'0');
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const artJetzt=()=>(document.querySelector('input[name=art]:checked')||{}).value||'reel';
 $('#senden').onclick=async()=>{
-  if(!videos.length)return; const btn=$('#senden'); btn.disabled=true; $('#err').textContent=''; $('#ok').hidden=true; const bar=$('#bar'); bar.hidden=false; const fill=bar.querySelector('i');
+  if(!videos.length)return;
+  if(!$('#absender').value.trim()){$('#err').textContent='Bitte trag oben deinen Namen bei „Absender“ ein — sonst weiß im Team niemand, von wem das Material kommt.';$('#absender').focus();return}
+  const btn=$('#senden'); btn.disabled=true; $('#err').textContent=''; $('#ok').hidden=true; const bar=$('#bar'); bar.hidden=false; const fill=bar.querySelector('i');
   const art=artJetzt(), mitZusatz=art!=='heute';
   // Bei mehreren Teilen 01-, 02- … voranstellen: die Reihenfolge der Liste gilt, nicht das Dateisystem.
   const teile=videos.map((f,i)=>({f,name:videos.length>1?String(i+1).padStart(2,'0')+'-'+f.name:f.name}));

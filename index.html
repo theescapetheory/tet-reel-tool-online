@@ -1351,16 +1351,40 @@ function frischStand(e){
   if(e.art==='Reel') return e.stand==='neu'?'wartet auf die Automatik':e.reels?(e.reels+(e.reels===1?' Vorschnitt liegt bereit':' Vorschnitte liegen bereit')):(LABEL[e.stand]||e.stand);
   return ({'story-roh':'liegt im Story-Rohmaterial','kar-offen':'Karussell · offen','kar-frei':'Karussell · freigegeben',
     'heute-bereit':'untertitelt, geht heute raus','heute-gepostet':'gepostet','heute-fehler':'Fehler — bitte ansehen'})[e.stand]||'wird verarbeitet'; }
+function frischPlan(e){ const p=e.plan||{};
+  if(p.art==='plan') return `<small class="hint">${esc(p.text)}</small>`;
+  if(p.art==='ausser') return `<span class="pill" style="background:#fff3e6;color:#9a3412;border-color:#fdba74;font-weight:700">AUSSER PLAN</span><br><small class="hint">${esc(String(p.text).replace(/^außer Plan — /,''))}</small>`;
+  return `<small class="hint" style="color:var(--red)">${esc(p.text||'nicht zuzuordnen')}</small>`; }
 function frischBlock(liste){
-  const zeilen=(liste||[]).map((e,i)=>`<tr data-frisch="${esc(e.name)}" onclick='nav(${JSON.stringify(e.ziel)},FRISCH[${i}].arg)' style="cursor:pointer">
-    <td style="white-space:nowrap;width:150px"><small class="hint">${esc(frischWann(e.zeit))}</small></td>
-    <td style="width:110px"><span class="pill">${esc(e.art)}</span></td>
-    <td><b>${esc(e.name)}</b>${e.prio?PRIO_MARKE:''}${e.von?`<br><small class="hint">von ${esc(e.von)}</small>`:''}</td>
-    <td><small class="hint">${esc(frischStand(e))}</small></td></tr>`).join('');
+  const zeilen=(liste||[]).map((e,i)=>`<tr data-frisch="${esc(e.name)}" data-plan="${esc((e.plan||{}).art||'')}" onclick='nav(${JSON.stringify(e.ziel)},FRISCH[${i}].arg)' style="cursor:pointer">
+    <td style="white-space:nowrap;width:140px"><small class="hint">${esc(frischWann(e.zeit))}</small></td>
+    <td style="width:150px">${e.von?`<b>${esc(e.von)}</b>`:'<b style="color:var(--red)">Absender fehlt</b>'}</td>
+    <td style="width:120px"><span class="pill">${esc(e.art)}</span>${e.prio?'<br>'+PRIO_MARKE:''}</td>
+    <td><b>${esc(e.titel||e.name)}</b>${e.hinweis?`<br><small class="hint">„${esc(e.hinweis)}“</small>`:''}</td>
+    <td style="width:250px">${frischPlan(e)}</td>
+    <td style="width:170px"><small class="hint">${esc(frischStand(e))}</small></td></tr>`).join('');
   window.FRISCH=liste||[];
-  return `<div class="sec" id="frisch"><h2>Frisch reingekommen</h2><div class="card">${zeilen
-    ?`<table><tr><th>Wann</th><th>Was</th><th>Name</th><th>Stand</th></tr>${zeilen}</table>`
+  const ausser=(liste||[]).filter(e=>(e.plan||{}).art==='ausser').length, ohne=(liste||[]).filter(e=>(e.plan||{}).art==='unklar').length;
+  return `<div class="sec" id="frisch"><h2>Frisch reingekommen</h2><div class="card">
+    ${ausser||ohne?`<p class="meta" style="margin:0 0 10px">${ausser?`<b style="color:#9a3412">${ausser} außer Plan</b>`:''}${ausser&&ohne?' · ':''}${ohne?`<b style="color:var(--red)">${ohne} ohne Absender</b>`:''} in den letzten sieben Tagen</p>`:''}
+    ${zeilen
+    ?`<table><tr><th>Wann</th><th>Von</th><th>Was</th><th>Datei · Hinweis</th><th>Im Plan</th><th>Stand</th></tr>${zeilen}</table>`
     :'<p class="meta" style="margin:0">In den letzten sieben Tagen ist nichts Neues angekommen.</p>'}</div></div>`; }
+// Die laufende Woche laut Postingplan: wer ist dran, was ist dazu schon da (Anne 13.10.2026).
+function planWocheBlock(woche){
+  if(!(woche||[]).length) return '';
+  window.PLANWOCHE=woche;
+  const dat=iso=>iso.slice(8,10)+'.'+iso.slice(5,7)+'.';
+  const zeilen=woche.map((z,i)=>{
+    const da=(z.da||[]).map((d,k)=>`<span class="pill ok" style="cursor:pointer" onclick='event.stopPropagation();nav(${JSON.stringify(d.ziel)},PLANWOCHE[${i}].da[${k}].arg)'>✓ ${esc(d.art)}</span>${d.prio?' '+PRIO_MARKE:''} <small class="hint">${esc(frischWann(d.zeit))}</small>`).join('<br>');
+    const fehlt=z.vorbei?'<small class="hint">nichts gekommen</small>':`<b style="color:${z.heute?'var(--red)':'#9a3412'}">${z.heute?'heute dran — noch nichts da':'noch nichts da'}</b>`;
+    return `<tr data-planwoche="${esc(z.tag+'-'+z.wer)}" style="${z.vorbei?'opacity:.55':''}${z.heute?';background:rgba(210,180,140,.14)':''}">
+      <td style="white-space:nowrap;width:110px"><b>${esc(z.tag)}</b> <small class="hint">${dat(z.datum)}</small></td>
+      <td style="width:130px"><b>${esc(z.wer)}</b></td><td style="width:160px">${esc(z.format)}</td>
+      <td><small class="hint">${esc(z.thema)}</small></td><td style="width:300px">${da||fehlt}</td></tr>`}).join('');
+  return `<div class="sec" id="planwoche"><h2>Diese Woche laut Plan</h2><div class="card">
+    <table><tr><th>Tag</th><th>Wer</th><th>Format</th><th>Thema</th><th>Material</th></tr>${zeilen}</table>
+    <p class="meta" style="margin:10px 0 0;font-size:12px">Zugeordnet wird nach Absender und Format. Den Wochenplan pflegst du im Contentplan.</p></div></div>`; }
 
 function vUeber(m){
   // Geruest sofort zeigen, statt die Seite leer zu lassen, bis die Daten da sind (Anne 17.09.)
@@ -1404,6 +1428,7 @@ function vUeber(m){
       <div class="meta" style="font-size:12px;margin-top:4px">${esc(st.laeuft.was||'Die Aufnahme wird verarbeitet.')} <span style="opacity:.7">· dieser Durchgang läuft seit ${st.laeuft.minuten} Min</span></div></div>`:''}
 
     ${frischBlock(d.frisch)}
+    ${planWocheBlock(d.planWoche)}
 
     <div class="sec"><h2>Wo liegt was</h2>
       <div class="kpi-grid">
@@ -1631,6 +1656,9 @@ async function uplSenden(key){
   const dateien=UPL.videos.map((f,i)=>({file:f,art:'video',name:viele?String(i+1).padStart(2,'0')+'-'+f.name:f.name}))
     .concat(heute?[]:UPL.zusatz.map(f=>({file:f,art:'zusatz',name:f.name})));
   const namen=UPL.videos.map(f=>f.name).join(', ');
+  // Anne 13.10.2026: ohne Absender laesst sich die Lieferung nicht dem Plan zuordnen — also Pflicht.
+  if(!uplAbsenderJetzt()){const s=document.getElementById('uplStatus'); if(s) s.textContent='Nicht hochgeladen: Bitte oben deinen Namen bei „Absender“ eintragen — sonst weiß niemand, von wem das Material kommt.';
+    const a=document.getElementById('uplAbsender'); if(a){a.style.borderColor='var(--red)';a.focus()} return}
   const fin=await uplLiefern(key,{name:UPL.videos[0].name,art:UPL.art,notizen:heute?'':(UPL.notiz||''),absender:uplAbsenderJetzt(),prio:uplPrioJetzt()},dateien);
   if(!fin)return;
   const wo={reel:window.HOSTED?'Der Rechner im Studio holt es jetzt ab und beginnt mit der Verarbeitung.':'Liegt im Eingang und wird verarbeitet.',
@@ -1644,6 +1672,8 @@ async function uplKarussellSenden(key){
   if(UPL.karArt!=='anweisung'&&!UPL.zusatz.length)return toast('Bitte Dateien wählen');
   if(UPL.karArt==='anweisung'&&!notiz)return toast('Bitte Anweisungen eintragen');
   const dateien=UPL.zusatz.map((f,i)=>({file:f,art:'zusatz',name:String(i+1).padStart(2,'0')+'-'+f.name}));
+  if(!uplAbsenderJetzt()){const s=document.getElementById('uplStatus'); if(s) s.textContent='Nicht hochgeladen: Bitte oben deinen Namen bei „Absender“ eintragen — sonst weiß niemand, von wem das Material kommt.';
+    const a=document.getElementById('uplAbsender'); if(a){a.style.borderColor='var(--red)';a.focus()} return}
   const fin=await uplLiefern(key,{name,art:'karussell',karussell_art:UPL.karArt||'fertig',notizen:notiz,absender:uplAbsenderJetzt(),prio:uplPrioJetzt()},dateien);
   if(!fin)return;
   uplGemeldet('✓ Angekommen: Karussell „'+name+'“'+(dateien.length?' mit '+dateien.length+' Datei(en)':'')+'. '+(window.HOSTED?'Der Rechner im Studio holt es jetzt ab; danach steht es unter Karussells · Rohmaterial.':'Es steht unter Karussells · Rohmaterial.'));
