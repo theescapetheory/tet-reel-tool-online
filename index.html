@@ -2367,6 +2367,18 @@ function rpAendernOk(datum, material){
   const plan=(S.redaktionsplan||[]).map(x=>(x.datum===datum&&(x.material||'')===material)?{...x,datum:t,uhrzeit:z}:x);
   tun('/api/redaktionsplan',{plan},'Verschoben auf '+t+' '+z).then(()=>load());
 }
+// Metricool-Beitraege eines Tages ohne Doppelte (Anne 17.10.2026: „warum steht es immer so komisch mehrfach drin?").
+// Metricool legt zu einem geplanten Beitrag oft eine Entwurfskopie an, und unsere eigenen Auftraege stehen ausserdem
+// im Kalender. Gezeigt wird je Uhrzeit und Art ein Eintrag: der eigene Auftrag (hat „ansehen & ändern"), sonst der
+// echte Metricool-Beitrag, die Entwurfskopie nie.
+function mcTag(k,auf){
+  const z=v=>String(v||'').slice(0,5);
+  const art=t=>{t=String(t||'').toUpperCase();return t==='KARUSSELL'?'POST':t};
+  const alle=((S.metricool_kalender||{}).posts||[]).filter(x=>x.datum===k);
+  const echt=alle.filter(x=>!x.entwurf);
+  const nutz=echt.length?alle.filter(x=>!x.entwurf||!echt.some(y=>z(y.uhrzeit)===z(x.uhrzeit)&&(y.typ||'')===(x.typ||''))):alle;
+  return nutz.filter(x=>!(auf||[]).some(a=>z(a.uhrzeit)===z(x.uhrzeit)&&art(a.typ)===art(x.typ)));
+}
 // Ein eingeplanter Beitrag: ansehen, verschieben, absagen (Anne 17.09.)
 const SLOTS=['08:00','11:30','14:00','17:00','20:00'];
 function planEintrag(unter){
@@ -2469,7 +2481,7 @@ function vPlan(){
     return `<div class="day" ondragover="planUeber(event)" ondragleave="planRaus(event)" ondrop="planDrop(event,'${k}')"><b>${kurz} ${d.getDate()}.${d.getMonth()+1}.</b>
       ${rhythmus.length?`<div class="tagesplan">${rhythmus.map(e=>esc([e.wer,e.format,e.thema].filter(Boolean).join(' · '))).join('<br>')}</div>`:''}
       ${(()=>{const e=[];
-        ((S.metricool_kalender||{}).posts||[]).filter(x=>x.datum===k).forEach(x=>e.push({z:x.uhrzeit||'',h:`<div class="slot mc" title="${esc(x.text||'')}"><span class="zeit">${esc(x.uhrzeit)}</span> <span class="pill">${esc(x.typ)}</span><div class="netz">${esc((x.netzwerke||[]).join(' · '))}</div>${x.text?`<div style="font-size:11px;line-height:1.3;margin-top:3px;color:var(--grey)">${esc(x.text.slice(0,70))}…</div>`:''}${x.url?`<a href="${esc(x.url)}" target="_blank" class="netz">ansehen ↗</a>`:''}</div>`}));
+        mcTag(k,auf).forEach(x=>e.push({z:x.uhrzeit||'',h:`<div class="slot mc" title="${esc(x.text||'')}"><span class="zeit">${esc(x.uhrzeit)}</span> <span class="pill">${esc(x.typ)}</span><div class="netz">${esc((x.netzwerke||[]).join(' · '))}</div>${x.text?`<div style="font-size:11px;line-height:1.3;margin-top:3px;color:var(--grey)">${esc(x.text.slice(0,70))}…</div>`:''}${x.url?`<a href="${esc(x.url)}" target="_blank" class="netz">ansehen ↗</a>`:''}</div>`}));
         auf.forEach(a=>e.push({z:a.uhrzeit||'',h:`<div class="slot plan" style="cursor:pointer" onclick="planEintrag('${esc(a.unter||'')}')"><span class="zeit">${esc(a.uhrzeit||'')}</span> ${esc(a.thema||a.titel||a.typ||'')}<div class="netz">${esc(a.status||'')} · ansehen &amp; ändern</div></div>`}));
         rs.forEach(r=>e.push({z:r.slot||'',h:`<div class="slot plan"><span class="zeit">${esc(r.slot||'')}</span> ${esc(r.titel||(r.id||'').split('/').pop())}${r.gepostet?' ✓':''}</div>`}));
         rpk.forEach((x,xi)=>{const mat=(MATERIAL||[]).find(y=>y.id===x.material);
