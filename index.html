@@ -2077,7 +2077,8 @@ function storyListe(m,art){
       return g.length?`<div class="sec"><h2>${t} <span class="pill">${g.length}</span></h2>
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${g.map(x=>`
         <div class="card">${x.absender?`<div class="eyebrow">von ${esc(x.absender)}</div>`:''}<b style="font-size:13px;line-height:1.25;display:block">${x.prio?PRIO_MARKE:''}${esc(storyTitel(x))}</b>${x.hinweis?`<div class="meta" style="font-size:11px;margin-top:2px">${esc(x.hinweis.slice(0,120))}</div>`:''}
-          ${x.video?`<video src="${x.video}" ${x.bild?`poster="${x.bild}"`:''} controls preload="none" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:var(--tint);aspect-ratio:9/16;object-fit:cover"></video>`
+          ${(x.teile&&x.teile.length>1)?x.teile.map((t,i)=>`<div class="meta" style="font-size:11px;margin-top:8px">Teil ${i+1} von ${x.teile.length}</div><video src="${t.video}" ${t.bild?`poster="${t.bild}"`:''} controls preload="none" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:4px 0 8px;background:var(--tint);aspect-ratio:9/16;object-fit:cover"></video>`).join('')
+           :x.video?`<video src="${x.video}" ${x.bild?`poster="${x.bild}"`:''} controls preload="none" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:var(--tint);aspect-ratio:9/16;object-fit:cover"></video>`
                    :`<div class="meta" style="font-size:11px;margin:8px 0">${x.dateien||0} Datei(en) · ${esc(x.quelle||'')}</div>`}
           ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto">${esc(x.notizen.slice(0,200))}</div>`:''}
           <div class="row" style="gap:6px;margin-top:8px">
