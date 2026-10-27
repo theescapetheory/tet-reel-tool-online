@@ -1834,6 +1834,7 @@ async function vReel(m){
     <label class="btn btn-ghost" style="cursor:pointer" title="Ein außerhalb geschnittenes Video hochladen — es steht danach unter Freigegeben im Contentplan">Fertige Fassung hochladen<input type=file accept="video/mp4,video/quicktime" style=display:none onchange="uploadFrei(this)"></label>
     <button class="btn btn-ghost" onclick="job(['run','${esc(dir)}'],'Reel neu bauen')" title="Übernimmt gespeicherte Änderungen an Schnitt und Untertiteln ins Video (einige Minuten)">Neu bauen</button>
     <button class="btn btn-ghost" onclick="reelTechnik()" title="Weitere Werkzeuge">Mehr …</button>
+    <button class="btn btn-ghost" style="color:var(--red)" onclick="if(confirm('Diesen Vorschnitt löschen? Er verschwindet aus Vorschnitt und Schnittstudio und wird nicht wieder gebaut. (Er liegt danach unter „verworfen“ in der Aufnahme, falls man ihn doch braucht.)'))job(['verwerfen','${esc(dir)}'],'Vorschnitt löschen')" title="Für Vorschnitte, aus denen nichts geworden ist">Löschen</button>
     <span class="meta" id="uplStatus"></span>
     ${canPublish?'':`<span class="meta" style="font-size:11px">Prüfung noch offen — Freigeben geht trotzdem</span>`}</div>
   <div class="row" id="reelTechnik" hidden style="margin-bottom:18px;padding:12px;background:var(--navy3);border-radius:var(--rand)">
