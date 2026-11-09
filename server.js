@@ -2,7 +2,7 @@
 // Diese App laeuft bei einem Hoster (Railway/Render/Fly) und braucht KEINE Engine: sie zeigt den letzten
 // Stand, den der Rechner mit der Engine per Sync hochlaedt, und sammelt alles, was Nutzer im Tool tun,
 // als Auftraege ein, die der Rechner abholt und ausfuehrt. Keine Abhaengigkeiten, nur Node >= 18.
-//   ENV: PORT · COCKPIT_PASS (Login, Benutzername egal) · SYNC_SECRET (Rechner -> Spiegel) · DATA_DIR (Volume)
+//   ENV: PORT · COCKPIT_PASS (Login, Benutzername egal; eigene Zugaenge je Person ueber snapshot.zugaenge) · SYNC_SECRET (Rechner -> Spiegel) · DATA_DIR (Volume)
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
 const PORT = Number(process.env.PORT || 8080);
 const PASS = process.env.COCKPIT_PASS || "";
@@ -92,10 +92,18 @@ const sendJSON = (res, code, o) => { res.writeHead(code, { "Content-Type": "appl
 const readBody = (req, limit = 50e6) => new Promise((ok, bad) => { const c = []; let n = 0; req.on("data", (d) => { n += d.length; if (n > limit) { bad(new Error("zu gross")); req.destroy(); } c.push(d); }); req.on("end", () => ok(Buffer.concat(c))); req.on("error", bad); });
 const safe = (root, rel) => { const p = path.normalize(path.join(root, rel)); return p.startsWith(root) ? p : null; };
 
+// Eigener Zugang je Person (09.11.2026, Praktikantin Leo): Benutzername = Name, eigenes Passwort.
+// Die Eintraege (nur Salz + SHA-256) kommen mit dem Schnappschuss vom Rechner (`tetreel/zugaenge.py`).
+function eigenerZugang(name, pw) {
+  const e = (snapshot.zugaenge || {})[String(name || "").trim().split(/\s+/).join(" ").toLowerCase()];
+  if (!e || !e.salz || !e.hash || !pw) return false;
+  const ist = crypto.createHash("sha256").update(e.salz + ":" + pw).digest(), soll = Buffer.from(e.hash, "hex");
+  return soll.length === ist.length && crypto.timingSafeEqual(ist, soll);
+}
 function login(req, res) {
   if (!PASS) return true;
   const h = req.headers.authorization || "";
-  if (h.startsWith("Basic ")) { const [, pw] = Buffer.from(h.slice(6), "base64").toString().split(/:(.*)/s); if (pw === PASS) return true; }
+  if (h.startsWith("Basic ")) { const [name, pw] = Buffer.from(h.slice(6), "base64").toString().split(/:(.*)/s); if (pw === PASS || eigenerZugang(name, pw)) return true; }
   res.writeHead(401, { "WWW-Authenticate": 'Basic realm="escape-studio"', "Content-Type": "text/plain; charset=utf-8" }); res.end("Login"); return false;
 }
 function syncOk(req) { return SECRET && (req.headers.authorization || "") === "Bearer " + SECRET; }
