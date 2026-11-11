@@ -1522,8 +1522,8 @@ function uplFormular(ziel, key){
       <button class="btn ghost" data-art="story" title="schnittfertig — es kommen nur Untertitel drauf" onclick="uplArtWahl('story')">Story-Material (Plan)</button>
       <button class="btn ghost" data-art="karussell" onclick="uplArtWahl('karussell')">Karussell</button>
       <button class="btn ghost" data-art="heute" title="schnittfertig — Untertitel drauf und sofort raus" onclick="uplArtWahl('heute')">⚡ Story HEUTE — sofort posten</button></div>
-    <label class="meta"><b>Video</b></label>
-    <div class="row" id="uplVideoZeile" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer">Video wählen<input type="file" accept="video/*" multiple hidden onchange="uplSetVideo(this)"></label><span id="uplV" class="meta">–</span></div>
+    <label class="meta"><b id="uplHauptLabel">Video</b></label>
+    <div class="row" id="uplVideoZeile" style="gap:10px;align-items:center"><label class="btn ghost" style="cursor:pointer"><span id="uplHauptKnopf">Video wählen</span><input id="uplHauptInput" type="file" accept="video/*" multiple hidden onchange="uplSetVideo(this)"></label><span id="uplV" class="meta">–</span></div>
     <div id="uplKarussellZeile" hidden>
       <div class="row" id="uplKarArt" style="gap:8px;flex-wrap:wrap;margin-bottom:8px">
         <button class="btn" data-kar="fertig" onclick="uplKarArt('fertig')">Fertige Slides</button>
@@ -1570,6 +1570,12 @@ function uplIcloudHolen(){const i=document.getElementById('uplIcloud'),st=docume
   const n=UPL.art==='reel'?((document.getElementById('uplNotiz')||{}).value||''):'';const args=['icloud',l,'--art',UPL.art];if(n)args.push('--notizen',n);
   i.value='';if(st)st.textContent='';job(args,'iCloud-Link holen')}
 function uplArtWahl(a){UPL.art=a;
+  // Bea 11.11.2026: Storys duerfen auch Fotos sein — Story (Plan) und Story HEUTE nehmen Bilder an.
+  const st=(a==='story'||a==='heute');
+  const hl=document.getElementById('uplHauptLabel'); if(hl) hl.textContent=st?'Video oder Foto':'Video';
+  const hk=document.getElementById('uplHauptKnopf'); if(hk) hk.textContent=st?'Video/Foto wählen':'Video wählen';
+  const hi=document.getElementById('uplHauptInput'); if(hi) hi.accept=st?'video/*,image/*':'video/*';
+  if(!st&&UPL.videos&&UPL.videos.some(f=>/^image\//.test(f.type))){UPL.videos=[];UPL.video=null;const v=document.getElementById('uplV');if(v)v.textContent='–'}
   const vz=document.getElementById('uplVideoZeile'); if(vz) vz.hidden=(a==='karussell');
   const iz=document.getElementById('uplIcloudZeile'); if(iz) iz.hidden=(a==='karussell');   // ein Karussell kommt nicht per iCloud-Link
   const kz=document.getElementById('uplKarussellZeile'); if(kz) kz.hidden=(a!=='karussell');
@@ -1709,7 +1715,7 @@ async function sessionEntfernen(id){if(!confirm('Diesen Upload aus dem Eingang e
 let VS={suche:'',alle:false};
 function vVorschnitt(){
  const imStudio=new Set(((S.schnittstudio||{}).pakete||[]).map(p=>p.slug));
- let alle=S.sessions.flatMap(s=>s.reels.filter(r=>r.gerendert).map(r=>({...r,session:s.id,datum:s.datum||'',prio:!!s.prio})));
+ let alle=S.sessions.flatMap(s=>s.reels.filter(r=>r.gerendert&&!r.erledigt).map(r=>({...r,session:s.id,datum:s.datum||'',prio:!!s.prio})));
  const gesamt=alle.length, q=VS.suche.trim().toLowerCase();
  if(q) alle=alle.filter(r=>(r.titel+' '+r.session+' '+r.slug).toLowerCase().includes(q));
  alle.sort((a,b)=>(b.prio?1:0)-(a.prio?1:0)||String(b.datum).localeCompare(String(a.datum)));   // Prio zuerst
@@ -1837,6 +1843,7 @@ async function vReel(m){
     <button class="btn btn-ghost" style="color:var(--red)" onclick="if(confirm('Diesen Vorschnitt löschen? Er verschwindet aus Vorschnitt und Schnittstudio und wird nicht wieder gebaut. (Er liegt danach unter „verworfen“ in der Aufnahme, falls man ihn doch braucht.)'))job(['verwerfen','${esc(dir)}'],'Vorschnitt löschen')" title="Für Vorschnitte, aus denen nichts geworden ist">Löschen</button>
     <span class="meta" id="uplStatus"></span>
     ${canPublish?'':`<span class="meta" style="font-size:11px">Prüfung noch offen — Freigeben geht trotzdem</span>`}</div>
+  ${d.tor?`<div id="torStand" class="meta" style="margin:-4px 0 12px;font-size:12px;color:${d.tor.ok?'var(--green)':'var(--red)'}">${d.tor.ok?'✓ Postbar ohne Nacharbeit (Qualitätstor)':'Noch nicht postbar: '+d.tor.gruende.map(esc).join(' · ')}</div>`:''}
   <div class="row" id="reelTechnik" hidden style="margin-bottom:18px;padding:12px;background:var(--navy3);border-radius:var(--rand)">
     <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="job(['straffen','${esc(dir)}','--probe'],'Pausen prüfen')" title="Zeigt nur, was gekürzt würde — ändert nichts">Pausen prüfen</button>
     <button class="btn ghost" ${d.gerendert?'':'disabled'} onclick="if(confirm('Pausen und doppelte Anläufe aus diesem Reel schneiden? Danach bitte „Neu bauen“.'))job(['straffen','${esc(dir)}'],'Pausen entfernen')">Pausen entfernen</button>
@@ -2078,7 +2085,8 @@ function storyListe(m,art){
       return g.length?`<div class="sec"><h2>${t} <span class="pill">${g.length}</span></h2>
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${g.map(x=>`
         <div class="card">${x.absender?`<div class="eyebrow">von ${esc(x.absender)}</div>`:''}<b style="font-size:13px;line-height:1.25;display:block">${x.prio?PRIO_MARKE:''}${esc(storyTitel(x))}</b>${x.hinweis?`<div class="meta" style="font-size:11px;margin-top:2px">${esc(x.hinweis.slice(0,120))}</div>`:''}
-          ${(x.teile&&x.teile.length>1)?x.teile.map((t,i)=>`<div class="meta" style="font-size:11px;margin-top:8px">Teil ${i+1} von ${x.teile.length}</div><video src="${t.video}" ${t.bild?`poster="${t.bild}"`:''} controls preload="none" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:4px 0 8px;background:var(--tint);aspect-ratio:9/16;object-fit:cover"></video>`).join('')
+          ${x.nurBild?x.teile.map(t=>`<img src="${t.bild}" alt="" loading="lazy" onerror="bildFehlt(this)" style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:var(--tint);aspect-ratio:9/16;object-fit:cover;display:block">`).join('')
+           :(x.teile&&x.teile.length>1)?x.teile.map((t,i)=>`<div class="meta" style="font-size:11px;margin-top:8px">Teil ${i+1} von ${x.teile.length}</div><video src="${t.video}" ${t.bild?`poster="${t.bild}"`:''} controls preload="none" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:4px 0 8px;background:var(--tint);aspect-ratio:9/16;object-fit:cover"></video>`).join('')
            :x.video?`<video src="${x.video}" ${x.bild?`poster="${x.bild}"`:''} controls preload="none" playsinline style="width:100%;max-width:190px;border-radius:10px;margin:8px 0;background:var(--tint);aspect-ratio:9/16;object-fit:cover"></video>`
                    :`<div class="meta" style="font-size:11px;margin:8px 0">${x.dateien||0} Datei(en) · ${esc(x.quelle||'')}</div>`}
           ${x.notizen?`<div class="meta" style="font-size:11px;white-space:pre-wrap;max-height:64px;overflow:auto">${esc(x.notizen.slice(0,200))}</div>`:''}
@@ -2088,7 +2096,7 @@ function storyListe(m,art){
             ${ph==='freigegeben'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>
               <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyZurueck('${esc(x.name)}')">zurück an Nico</button>`:''}
             ${ph==='rohmaterial'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('storyroh',{name:'${esc(x.name)}'})">Ansehen</button>`
-              :`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyAendern('${esc(x.name)}','${esc(x.video||'')}')">Ändern …</button>${x.phase==='nacharbeit'?`
+              :`${x.nurBild?'':`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="storyAendern('${esc(x.name)}','${esc(x.video||'')}')">Ändern …</button>`}${x.phase==='nacharbeit'?`
               <button class="btn" style="font-size:12px;padding:5px 10px" onclick="stZurFreigabe('${esc(x.name)}')">Zurück in die Freigabe</button>`:''}`}
           </div></div>`).join('')}</div></div>`:''}).join('')
       || `<p class="meta">${art==='roh'
@@ -2167,7 +2175,10 @@ function vKarRoh(m){ karListe(m,'roh') }
 function vKarFrei(m){ karListe(m,'frei') }
 function karListe(m,art){
   const titel = art==='roh' ? 'Karussells · Rohmaterial' : 'Karussells · Freigabe';
-  m.innerHTML=`<h1>${titel}</h1><div id="ksBox">lädt …</div>`;
+  // Wochenserie (17.10.2026): sieben Karussells aus Transkript-Stichproben, landen hier zur Pruefung. Gebaut wird
+  // sie von allein einmal je Woche; der Knopf stoesst sie von Hand an (nur im Rohmaterial, nur wenn Anne es will).
+  const serie = art==='roh' ? `<div class="row" style="gap:10px;margin-bottom:14px;align-items:center"><button class="btn ghost" id="ksSerie" onclick="ksSerieBauen()">Wochenserie bauen</button><span class="meta" style="font-size:12px">sieben Karussells aus den letzten Calls — erscheinen hier zur Prüfung, gepostet wird nichts</span></div>` : '';
+  m.innerHTML=`<h1>${titel}</h1>${serie}<div id="ksBox">lädt …</div>`;
   api('/api/karussells').then(d=>{const b=$('#ksBox');if(!b)return;
     if(!d||!Array.isArray(d.karussells)){b.innerHTML='<p class="meta">Konnte nicht laden — versuche es gleich noch einmal …</p>';
       clearTimeout(window._ksT);window._ksT=setTimeout(()=>{if(view==='karRoh'||view==='karFrei')karListe(m,art)},3000);return}
@@ -2199,6 +2210,7 @@ function karListe(m,art){
 }
 // Eigene Seite fuer Karussells (Anne 17.09.): erst prueft jemand, dann steht es im Contentplan
 const KAR_ART={fertig:'fertige Seiten',material:'Rohmaterial — Nico baut die Seiten',anweisung:'nur Anweisungen'};
+function ksSerieBauen(){job(['karussell-serie'],'Karussell-Wochenserie bauen')}
 function ksFreigeben(name){
   // Nach dem Freigeben auf DERSELBEN Seite bleiben (vorher sprang die Ansicht auf eine alte Sammelseite).
   tun('/api/karussell/'+encodeURIComponent(name),{freigeben:true},'✓ Freigegeben — steht jetzt im Contentplan')
@@ -2221,7 +2233,8 @@ function vKarussell(m){
     <div class="sec"><h2>Caption</h2><textarea id="kaCaption" style="min-height:160px">${esc(d.caption||'')}</textarea>
     <div class="row" style="margin-top:10px"><button class="btn" onclick="kaSpeichern()">Caption speichern</button>
     ${d.phase==='zur-pruefung'?'<button class="btn ghost" onclick="kaFreigeben()">Freigeben</button>':''}
-    <button class="btn ghost" onclick="nav('plan')">Zum Contentplan →</button></div></div>`});
+    <button class="btn ghost" onclick="nav('plan')">Zum Contentplan →</button></div></div>
+    ${d.phase!=='gepostet'?kaAenderungFeld(d):''}`});
   return '';
 }
 let KA={name:'',reihenfolge:[]}, KAZIEHT=null;
@@ -2234,6 +2247,37 @@ function kaLoeschen(n){if(!confirm('Slide entfernen?'))return;
   tun('/api/karussell/'+encodeURIComponent(KA.name),{loeschen:n},'Slide entfernt').then(()=>render())}
 function kaSpeichern(){tun('/api/karussell/'+encodeURIComponent(KA.name),{caption:document.getElementById('kaCaption').value},'✓ Caption gespeichert')}
 function kaFreigeben(){tun('/api/karussell/'+encodeURIComponent(KA.name),{freigeben:true},'✓ Freigegeben — steht jetzt im Contentplan').then(r=>{if(!r)return;MATERIAL=null;render()})}
+
+
+// Anne 09.11.2026: „ein Feld für Änderungen und das dann neu gerendert wird, ähnlich wie in den Vorschnitten".
+// Der Wunsch geht an den Rechner (`tet-reel karussell-anweisung`), Claude ändert die Seiten, die harten Regeln
+// prüfen nach, dann werden die Slides neu gerendert. Von Hand gebaute Karussells: nur die Caption.
+function kaAenderungFeld(d){
+  const l=(d.anweisungen||[]).slice().reverse();
+  return `<div class="sec"><h2>Änderung anweisen</h2><div class="card">
+    <p class="meta" style="margin:0 0 8px;font-size:12px">${d.neu_render
+      ?'Beschreibe, was anders sein soll — die Seiten werden danach neu gerendert. Der alte Stand bleibt gesichert.'
+      :'Dieses Karussell wurde von Hand gestaltet: automatisch geändert wird nur die Caption, alles andere wird als „von Hand“ vermerkt.'}</p>
+    <textarea id="kaAnwText" style="min-height:90px" placeholder="z. B. Überschrift auf Seite 2 kürzer · Seite 4 raus · Termin am Mittwoch ist um 10:00, nicht 09:00"></textarea>
+    <div class="row" style="margin-top:10px;gap:8px;align-items:center">
+      <button class="btn" onclick="kaAnweisungSenden()">${d.neu_render?'Ändern und neu rendern':'Änderung ausführen'}</button>
+    </div>
+    <div id="kaAnwListe" style="margin-top:12px">${l.length?l.map(a=>`<div class="aufz" style="cursor:default">
+      <span class="dot ${a.status==='erledigt'?'fertig':a.status==='fehler'?'fehler':'laeuft'}"></span>
+      <div style="min-width:0;flex:1"><b>${esc(a.text)}</b>
+      <span class="meta" style="font-size:11px">${esc(a.von||'')} · ${esc(String(a.zeit||'').replace('T',' '))} · ${esc(a.status||'')}</span>
+      ${a.ergebnis?`<div class="erg">${esc(a.ergebnis)}</div>`:''}
+      ${a.von_hand?`<div class="erg" style="color:var(--red)">von Hand: ${esc(a.von_hand)}</div>`:''}</div></div>`).join('')
+      :'<p class="meta" style="margin:0">Noch keine Änderung.</p>'}</div>
+  </div></div>`;
+}
+function kaAnweisungSenden(){
+  const t=document.getElementById('kaAnwText'); const text=(t&&t.value||'').trim();
+  if(!text)return toast('Bitte die Änderung beschreiben');
+  t.value='';
+  // job() zeigt den Lauf unten an, öffnet am Ende das Ergebnis und lädt die Seite neu (dann stehen die neuen Slides da).
+  job(['karussell-anweisung',KA.name],'Karussell ändern · '+KA.name,{url:'/api/karussell-anweisung',body:{name:KA.name,text,von:uplAbsender()||'Team'}});
+}
 // ===== Contentplan: Kalender, Material, Postingplan, Redaktionsplan =====
 // Material, das nicht auf Instagram gehoert (z. B. ein Clip fuer den Circle), aus der Auswahl nehmen.
 // Die Datei bleibt liegen — nur die Anzeige verschwindet, damit nichts unwiederbringlich weg ist.
@@ -2248,7 +2292,7 @@ async function matAussortieren(id, titel){
 const RP_FORMATE=['Reel','Story','Karussell','B-Roll','Live'], RP_STATUS=['geplant','in Arbeit','freigegeben','gepostet'];
 function rpZeile(e,i){const sel=(name,list,val)=>`<select data-k="${name}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px">${list.map(o=>`<option ${o===val?'selected':''}>${o}</option>`).join('')}</select>`;
   const inp=(name,val,w)=>`<input data-k="${name}" value="${esc(val||'')}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px;width:${w||'100%'}">`;
-  return `<tr class="rpRow">${e.reel?`<td>`:'<td>'}${inp('datum',e.datum,'120px').replace('<input','<input type="date"')}</td><td>${sel('format',RP_FORMATE,e.format||'Reel')}</td><td>${inp('thema',e.thema)}</td><td>${inp('hook',e.hook)}</td><td>${sel('cta',['222','ANALYSE','–'],e.cta||'222')}</td><td>${sel('status',RP_STATUS,e.status||'geplant')}</td><td style="white-space:nowrap"><select data-k="material" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px;max-width:220px"><option value="">Material …</option>${(MATERIAL||[]).filter(m=>!e.format||m.typ===(e.format||'Reel')||(e.format||'').startsWith(m.typ)).map(m=>`<option value="${esc(m.id)}" ${m.id===e.material?'selected':''}>${esc(m.titel)} (${m.dateien.length})</option>`).join('')}</select> <input data-k="uhrzeit" type="time" value="${esc(e.uhrzeit||'11:30')}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px"> <button class="btn" style="padding:6px 10px" onclick="rpEinplanen(this)">Einplanen</button> <button class="btn ghost" style="padding:4px 8px" onclick="this.closest('tr').remove()">✕</button></td></tr>`}
+  return `<tr class="rpRow">${e.reel?`<td>`:'<td>'}${inp('datum',e.datum,'120px').replace('<input','<input type="date"')}</td><td>${sel('format',RP_FORMATE,e.format||'Reel')}</td><td>${inp('thema',e.thema)}</td><td>${inp('hook',e.hook)}</td><td>${sel('cta',['ANALYSE','–'],e.cta||'ANALYSE')}</td><td>${sel('status',RP_STATUS,e.status||'geplant')}</td><td style="white-space:nowrap"><select data-k="material" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px;max-width:220px"><option value="">Material …</option>${(MATERIAL||[]).filter(m=>!e.format||m.typ===(e.format||'Reel')||(e.format||'').startsWith(m.typ)).map(m=>`<option value="${esc(m.id)}" ${m.id===e.material?'selected':''}>${esc(m.titel)} (${m.dateien.length})</option>`).join('')}</select> <input data-k="uhrzeit" type="time" value="${esc(e.uhrzeit||'11:30')}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px"> <button class="btn" style="padding:6px 10px" onclick="rpEinplanen(this)">Einplanen</button> <button class="btn ghost" style="padding:4px 8px" onclick="this.closest('tr').remove()">✕</button></td></tr>`}
 function rpZeileNeu(){const t=$('#rpTab');const d=new Date();d.setDate(d.getDate()+1);t.insertAdjacentHTML('beforeend',rpZeile({datum:d.toISOString().slice(0,10)},0))}
 async function rpSpeichern(){const rows=[...document.querySelectorAll('#rpTab tr.rpRow')].map(tr=>{const o={};tr.querySelectorAll('[data-k]').forEach(el=>o[el.dataset.k]=el.value);const alt=(S.redaktionsplan||[]).find(e=>e.datum===o.datum&&e.thema===o.thema);if(alt&&alt.reel)o.reel=alt.reel;return o}).filter(o=>o.datum||o.thema);
   const r=await post('/api/redaktionsplan',{plan:rows});

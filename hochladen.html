@@ -77,7 +77,12 @@ function cutterSicht(){const a=(document.querySelector('input[name=art]:checked'
   if(b){b.hidden=(a==='heute');if(a==='heute'){zusatz=[];const l=document.getElementById('listZ');if(l)l.innerHTML=''}}
   const kar=a==='karussell';
   document.getElementById('karBlock').hidden=!kar;
-  document.getElementById('lblHaupt').textContent=kar?'1 · Videos (wenn es welche gibt)':'1 · Hauptmaterial (ein oder mehrere Videos)';
+  // Bea 11.11.2026: Storys duerfen auch Fotos sein — bei Story und Story HEUTE nimmt das Hauptfeld Bilder an.
+  const st=storyArt(a);
+  document.getElementById('lblHaupt').textContent=kar?'1 · Videos (wenn es welche gibt)':st?'1 · Hauptmaterial (Videos oder Fotos — jede Datei wird eine eigene Story)':'1 · Hauptmaterial (ein oder mehrere Videos)';
+  document.querySelector('#dropV b').textContent=st?'Videos oder Fotos hier ablegen':'Videos hier ablegen';
+  document.getElementById('video').accept=st?'video/*,image/*':'video/*';
+  if(!st&&typeof videos!=='undefined'){videos=videos.filter(f=>istVideo(f))}
   document.getElementById('lblZusatz').textContent=kar?'2 · Bilder, Slides, Screenshots':'2 · Zusatzmaterial';
   document.getElementById('lblNotiz').textContent=kar?'3 · Beschreibung · worum geht es, was soll auf die Slides?':'3 · Notizen für den Cutter';
   document.getElementById('notizen').placeholder=kar?'z. B. Bestandteil vom Karussell AM-Team: das sind wir, das machen wir …':'z. B. Bild bei 0:03 einblenden';
@@ -100,6 +105,9 @@ const HINWEIS = (t, farbe) => `<div style="margin-top:10px;padding:10px 12px;bor
 // Schnipseln gebaut haben will, waehlt sie hier zusammen aus. Sie bleiben ein Paket, in der
 // Reihenfolge der Liste; der Mac verbindet sie zu einem Beitrag. Die Grenze gilt je Datei.
 const istVideo=f=>/video|\.(mp4|mov|m4v)$/i.test(f.type+f.name);
+const istBild=f=>/image|\.(jpe?g|png|heic|heif|webp)$/i.test(f.type+f.name);
+function storyArt(a){return ['story','heute'].includes(a||artJetzt())}
+const hauptOk=f=>istVideo(f)||(storyArt()&&istBild(f));
 function listeV(){
   const zuGross=videos.filter(f=>f.size>MAX_BYTES), summe=videos.reduce((a,f)=>a+f.size,0);
   let extra='';
@@ -120,7 +128,7 @@ function sendbar(){
 function raus(i){videos.splice(i,1);listeV()}
 function hoch(i){[videos[i-1],videos[i]]=[videos[i],videos[i-1]];listeV()}
 bind($('#dropV'),$('#video'),fs=>{
-  for(const f of fs.filter(istVideo)) if(!videos.some(v=>v.name===f.name&&v.size===f.size)) videos.push(f);
+  for(const f of fs.filter(hauptOk)) if(!videos.some(v=>v.name===f.name&&v.size===f.size)) videos.push(f);
   $('#video').value=''; listeV();
 });
 bind($('#dropZ'),$('#zusatz'),fs=>{zusatz=zusatz.concat(fs);$('#listZ').innerHTML=zusatz.map(f=>`<div><span>${f.name}</span><span>${mb(f.size)}</span></div>`).join('');listeV()});
@@ -176,7 +184,8 @@ $('#senden').onclick=async()=>{
     if(kar){ const n=(ende.angekommen||[]).length||(teile.length+beilagen.length);
       $('#ok').innerHTML=`<b>Angekommen: Karussell „${esc($('#karName').value.trim())}“</b> · ${n} Datei(en)${$('#notizen').value.trim()?' und deine Beschreibung':''}.<br>${karArt==='fertig'?'Die Slides gehen so in die Freigabe.':'Das Material liegt beim Karussell. Kommt noch etwas dazu, einfach wieder mit demselben Namen hochladen.'}`; }
     else {
-    $('#ok').innerHTML=`<b>Angekommen: ${da.length||teile.length} von ${teile.length} ${teile.length>1?'Videos':'Video'}${sek?' · '+minSek(sek)+' Min.':''}</b>${beilagen.length?' + '+beilagen.length+' Zusatzdatei(en)':''}${liste}<br>${teile.length>1?'Die Teile werden zu einem Beitrag verbunden. ':''}${art==='heute'?'Die Story bekommt Untertitel und geht danach online — in der Regel innerhalb weniger Minuten.':art==='story'?'Das Team hat es jetzt in der Story-Planung.':'Das Team hat es jetzt und meldet sich, wenn etwas fehlt. Du kannst die Seite schließen.'} Danke!`;
+    const wort=teile.some(t=>istBild(t.f))?(teile.length>1?'Dateien':'Datei'):(teile.length>1?'Videos':'Video');
+    $('#ok').innerHTML=`<b>Angekommen: ${da.length||teile.length} von ${teile.length} ${wort}${sek?' · '+minSek(sek)+' Min.':''}</b>${beilagen.length?' + '+beilagen.length+' Zusatzdatei(en)':''}${liste}<br>${teile.length>1&&!storyArt(art)?'Die Teile werden zu einem Beitrag verbunden. ':''}${art==='heute'?'Die Story wird fertig gemacht (Videos bekommen Untertitel) und geht danach online — in der Regel innerhalb weniger Minuten.':art==='story'?'Das Team hat es jetzt in der Story-Planung.':'Das Team hat es jetzt und meldet sich, wenn etwas fehlt. Du kannst die Seite schließen.'} Danke!`;
     }
     videos=[]; zusatz=[]; $('#listV').innerHTML=''; $('#listZ').innerHTML=''; $('#notizen').value=''; $('#prio').checked=false;
   }catch(e){let m=e.message;try{m=JSON.parse(m).error||m}catch{};$('#err').textContent='Fehler: '+m; btn.disabled=false}
