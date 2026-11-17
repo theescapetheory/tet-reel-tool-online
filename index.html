@@ -2186,9 +2186,11 @@ function karListe(m,art){
     // Anne 17.09.: „bei den Karussells sehe ich nach wie vor nichts." Meine erste Aufteilung war
     // falsch — „Rohmaterial = ohne Seiten" traf auf kein einziges Karussell zu, die Seite war immer leer.
     // Richtig: Rohmaterial = alles, was hereinkam und noch nicht freigegeben ist. Freigabe = das Freigegebene.
+    // Anne 13.11.2026: „ich sehe es aber im Studio in Karussell Freigabe nicht" — Beas Special-Calls-Karussell
+    // wartete unter Rohmaterial. Wer freigeben will, sucht unter „Freigabe": das Wartende steht dort jetzt oben.
     const gruppen = art==='roh'
       ? [['zur-pruefung','Eingelaufen — warten auf Freigabe']]
-      : [['bereit-zum-posten','Freigegeben — im Contentplan'],['gepostet','Gepostet']];
+      : [['zur-pruefung','Wartet auf Freigabe'],['bereit-zum-posten','Freigegeben — im Contentplan'],['gepostet','Gepostet']];
     const passt=(x,g)=>x.phase===g;
     b.innerHTML=gruppen.map(([g,t])=>{const xs=ks.filter(x=>passt(x,g));
       return xs.length?`<div class="sec"><h2>${t} <span class="pill">${xs.length}</span></h2>
@@ -2202,6 +2204,7 @@ function karListe(m,art){
             <button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('karussell',{name:'${esc(x.name)}'})">Öffnen</button>
             ${g==='zur-pruefung'?`<button class="btn" style="font-size:12px;padding:5px 10px" onclick="ksFreigeben('${esc(x.name)}')">Freigeben</button>`:''}
             ${g==='bereit-zum-posten'?`<button class="btn ghost" style="font-size:12px;padding:5px 10px" onclick="nav('plan')">Einplanen</button>`:''}
+            <button class="btn ghost" style="font-size:12px;padding:5px 10px;color:var(--red)" onclick="ksLoeschen('${esc(x.name)}')">Löschen</button>
           </div></div>`).join('')}</div></div>`:''}).join('')
       || `<p class="meta">${art==='roh'
             ? 'Nichts Offenes — alles ist freigegeben. <a class="netz" style="cursor:pointer" onclick="nav(\'karFrei\')">zur Freigabe →</a>'
@@ -2215,6 +2218,11 @@ function ksFreigeben(name){
   // Nach dem Freigeben auf DERSELBEN Seite bleiben (vorher sprang die Ansicht auf eine alte Sammelseite).
   tun('/api/karussell/'+encodeURIComponent(name),{freigeben:true},'✓ Freigegeben — steht jetzt im Contentplan')
     .then(r=>{if(!r)return;MATERIAL=null;materialFrisch(true);render()})}
+
+// Anne 16.11.2026: Löschen-Knopf. Legt das Karussell in den Papierkorb neben den Phasen (zurückholbar), nichts endgültig.
+function ksLoeschen(name,zurueck){if(!confirm('Karussell „'+name+'“ löschen? Es verschwindet aus Freigabe und Contentplan-Auswahl.'))return;
+  tun('/api/karussell/'+encodeURIComponent(name),{weg:true},'✓ Karussell gelöscht')
+    .then(r=>{if(!r)return;MATERIAL=null;if(typeof materialFrisch==='function')materialFrisch(true);zurueck?nav('karFrei'):render()})}
 
 function vKarussell(m){
   m.innerHTML='<h1>'+esc(cur.name||'')+'</h1><div id="kaBox">lädt …</div>';
@@ -2233,7 +2241,8 @@ function vKarussell(m){
     <div class="sec"><h2>Caption</h2><textarea id="kaCaption" style="min-height:160px">${esc(d.caption||'')}</textarea>
     <div class="row" style="margin-top:10px"><button class="btn" onclick="kaSpeichern()">Caption speichern</button>
     ${d.phase==='zur-pruefung'?'<button class="btn ghost" onclick="kaFreigeben()">Freigeben</button>':''}
-    <button class="btn ghost" onclick="nav('plan')">Zum Contentplan →</button></div></div>
+    <button class="btn ghost" onclick="nav('plan')">Zum Contentplan →</button>
+    <button class="btn ghost" style="color:var(--red)" onclick="ksLoeschen(KA.name,true)">Karussell löschen</button></div></div>
     ${d.phase!=='gepostet'?kaAenderungFeld(d):''}`});
   return '';
 }
@@ -2550,7 +2559,11 @@ function vPlan(){
         rpk.forEach((x,xi)=>{const mat=(MATERIAL||[]).find(y=>y.id===x.material);
           const titel=x.thema||(mat&&mat.titel)||(x.material||'').split(':').pop()||x.format||'Beitrag';
           e.push({z:x.uhrzeit||'',h:`<div class="slot rp"><span class="zeit">${esc(x.uhrzeit||'')}</span> <span class="pill">${esc(x.format||'')}</span>
-            <span class="pill" style="background:#fdf8e8;border-color:#f0e4bd" title="steht nur im Redaktionsplan — wird nicht automatisch gepostet">nur geplant</span>
+            ${(()=>{// Anne 17.11.2026: „nur geplant" sagte nicht, warum nichts rausgeht. Jetzt steht der Grund da.
+              if(x.status==='verpasst')return `<span class="pill" style="background:#fde8e8;border-color:#f0bdbd" title="Termin ist vorbei, das Material war bis dahin nicht freigegeben — neuen Termin wählen">verpasst</span>`;
+              if(x.material&&!mat){const ziel=x.format==='Story'?'storyFrei':'karFrei';return `<a class="pill" style="background:#fdf8e8;border-color:#f0e4bd;cursor:pointer" title="Geht automatisch raus, sobald es freigegeben ist" onclick="nav('${ziel}')">wartet auf Freigabe</a>`}
+              if(x.material)return `<span class="pill" title="freigegeben — wird in wenigen Minuten als Auftrag eingeplant">wird eingeplant</span>`;
+              return `<span class="pill" style="background:#fdf8e8;border-color:#f0e4bd" title="Kein Material gewählt — nur eine Notiz">nur Notiz</span>`})()}
             <div style="font-size:12px;line-height:1.3;margin-top:3px">${esc(String(titel).slice(0,52))}</div>
             <div class="row" style="gap:6px;margin-top:4px">${x.material?`<a class="netz" style="cursor:pointer" onclick="matAnsehen('${esc(x.material)}')">ansehen</a>`:''}
             ${x.material?`<a class="netz" style="cursor:pointer;font-weight:700" onclick="rpJetztEinplanen('${esc(x.datum)}','${esc(x.uhrzeit||'11:30')}','${esc(x.material)}')">einplanen &amp; posten</a>`:''}
